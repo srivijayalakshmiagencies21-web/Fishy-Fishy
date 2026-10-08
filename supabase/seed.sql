@@ -1,0 +1,3 @@
+-- Starter accounts and payment modes are inserted by
+-- migrations/20261005054641_masters.sql so they travel with the schema.
+-- Put extra local-only sample rows here. This file is not applied to the remote project.
