@@ -31,12 +31,24 @@ export async function proxy(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const pathname = request.nextUrl.pathname;
   const signedIn = Boolean(data?.claims);
-  const isLogin = pathname === "/login";
+  const publicPaths = [
+    "/login",
+    "/manifest.json",
+    "/sw.js",
+    "/favicon.ico",
+    "/icon.svg",
+    "/icon.png",
+    "/apple-icon.png",
+  ];
+  const isPublicPath =
+    publicPaths.includes(pathname) ||
+    Boolean(pathname.match(/\.(?:svg|png|jpg|jpeg|gif|webp|ico|json|js)$/));
 
-  if (!signedIn && !isLogin) {
+  if (!signedIn && !isPublicPath) {
     return withSession(supabaseResponse, redirectTo(request, "/login"));
   }
 
+  const isLogin = pathname === "/login";
   if (signedIn && (isLogin || pathname === "/")) {
     return withSession(supabaseResponse, redirectTo(request, "/masters/accounts"));
   }
@@ -68,6 +80,6 @@ function withSession(from: NextResponse, to: NextResponse) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|json)$).*)",
   ],
 };
