@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Source_Sans_3 } from "next/font/google";
 import { WaveField } from "@/components/wave-field";
+import { ServiceWorkerRegister } from "@/components/sw-register";
+import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import "./globals.css";
 
 const sourceSans = Source_Sans_3({
@@ -50,8 +52,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${sourceSans.variable} h-full antialiased`}>
       <body className="min-h-full">
+        <ServiceWorkerRegister />
         <WaveField />
         {children}
+        <PwaInstallPrompt />
       </body>
     </html>
   );
