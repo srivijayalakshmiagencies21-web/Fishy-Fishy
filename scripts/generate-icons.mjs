@@ -1,13 +1,13 @@
 import sharp from "sharp";
 import fs from "fs";
 
-const svgPath = "app/icon.svg";
+const svgPath = "scripts/original-icon.svg";
 let svgContent = fs.readFileSync(svgPath, "utf-8");
 
 // replace <image href="..." width="512" height="512" />
-// with <image transform="translate(256,256) scale(1.5) translate(-256,-256)" href="..." width="512" height="512" />
+// with <image transform="translate(256,256) scale(1.4) translate(-256,-256)" href="..." width="512" height="512" />
 if (!svgContent.includes('transform=')) {
-  svgContent = svgContent.replace('<image href=', '<image transform="translate(256,256) scale(1.8) translate(-256,-256)" href=');
+  svgContent = svgContent.replace('<image href=', '<image transform="translate(256,256) scale(1.4) translate(-256,-256)" href=');
   fs.writeFileSync("app/icon.svg", svgContent);
   fs.writeFileSync("public/favicon.svg", svgContent);
 }
