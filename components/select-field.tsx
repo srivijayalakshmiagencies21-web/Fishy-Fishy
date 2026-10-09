@@ -28,35 +28,63 @@ function SelectOptionContent({ option }: { option: SelectOption }) {
 export function SelectField({
   name,
   options,
+  value: controlledValue,
   defaultValue,
   required = false,
   onChange,
   onChangeMultiple,
   compact = false,
+  integrated = false,
   placeholder = "Select",
   multiple = false,
   valueMultiple = [],
   showCountOnly = false,
+  disabled = false,
+  autoSelectWhenSingle = true,
 }: {
   name?: string;
   options: SelectOption[];
+  /** When set, selection is controlled by the parent (recommended for forms that keep ids in state). */
+  value?: string;
   defaultValue?: string;
   required?: boolean;
   onChange?: (value: string) => void;
   onChangeMultiple?: (values: string[]) => void;
   compact?: boolean;
+  integrated?: boolean;
   placeholder?: string;
   multiple?: boolean;
   valueMultiple?: string[];
   showCountOnly?: boolean;
+  disabled?: boolean;
+  /** When true, the sole option is selected automatically; with 2+ options the user must choose. */
+  autoSelectWhenSingle?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [value, setValue] = useState(defaultValue || "");
+  const isControlled = controlledValue !== undefined;
+  const [internalValue, setInternalValue] = useState(() => {
+    if (defaultValue) return defaultValue;
+    if (autoSelectWhenSingle && options.length === 1) return options[0].value;
+    return "";
+  });
+  const value = isControlled ? controlledValue : internalValue;
+  const soleOption =
+    !multiple && autoSelectWhenSingle && options.length === 1 ? options[0] : null;
+  const fieldValue = value || soleOption?.value || "";
   const [selectedMulti, setSelectedMulti] = useState<string[]>(valueMultiple);
   const [box, setBox] = useState<{ top: number; left: number; width: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLUListElement>(null);
   const listId = useId();
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const optionValuesKey = options.map((option) => option.value).join("\0");
+  const lastAutoSingleRef = useRef<string | null>(null);
+
+  function commitSingle(next: string) {
+    if (!isControlled) setInternalValue(next);
+    onChangeRef.current?.(next);
+  }
 
   // Keep internal multi state in sync if prop changes
   useEffect(() => {
@@ -66,7 +94,37 @@ export function SelectField({
     });
   }, [valueMultiple]);
 
-  const selected = options.find((option) => option.value === value);
+  // Uncontrolled: parent defaultValue can update after first mount (e.g. draft restore).
+  useEffect(() => {
+    if (isControlled || multiple || !defaultValue) return;
+    if (!options.some((option) => option.value === defaultValue)) return;
+    setInternalValue((prev) => (prev === defaultValue ? prev : defaultValue));
+  }, [defaultValue, isControlled, multiple, optionValuesKey]);
+
+  useEffect(() => {
+    if (multiple || disabled || !autoSelectWhenSingle) return;
+
+    if (options.length === 1) {
+      const only = options[0].value;
+      if (!isControlled) setInternalValue(only);
+      if (lastAutoSingleRef.current !== only) {
+        lastAutoSingleRef.current = only;
+        onChangeRef.current?.(only);
+      }
+      return;
+    }
+
+    lastAutoSingleRef.current = null;
+    if (isControlled) return;
+
+    setInternalValue((prev) => {
+      if (!prev || options.some((option) => option.value === prev)) return prev;
+      onChangeRef.current?.("");
+      return "";
+    });
+  }, [optionValuesKey, options.length, multiple, disabled, autoSelectWhenSingle, isControlled]);
+
+  const selected = options.find((option) => option.value === fieldValue);
   const selectedMultiOptions = options.filter((o) => selectedMulti.includes(o.value));
 
   function placeMenu() {
@@ -101,16 +159,38 @@ export function SelectField({
     };
   }, [open]);
 
+  const rootClass = [
+    "select-field",
+    compact && !integrated ? "select-field--compact" : "",
+    integrated ? "min-w-0 flex-1 flex justify-end" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const triggerClass = [
+    "input-field select-field-trigger",
+    integrated
+      ? "!min-h-0 !h-auto !w-auto !max-w-full !border-0 !bg-transparent !p-0 !pl-3 !shadow-none !rounded-none text-sm font-medium justify-end gap-1.5 focus:!border-0 focus:!shadow-none"
+      : "",
+    disabled ? "disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed disabled:border-gray-200" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div className={`select-field ${compact ? "select-field--compact" : ""}`} ref={rootRef}>
-      {!multiple && name && <input type="hidden" name={name} value={value} required={required} />}
+    <div className={rootClass} ref={rootRef}>
+      {!multiple && name && (
+        <input type="hidden" name={name} value={fieldValue} required={required} />
+      )}
       <button
         type="button"
-        className="input-field select-field-trigger"
+        disabled={disabled}
+        className={triggerClass}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listId}
         onClick={() => {
+          if (disabled) return;
           if (open) {
             setOpen(false);
             return;
@@ -119,7 +199,7 @@ export function SelectField({
           setOpen(true);
         }}
       >
-        <span className="flex min-w-0 flex-1 items-center truncate">
+        <span className={`flex min-w-0 items-center ${integrated ? "shrink" : "flex-1"}`}>
           {!multiple ? (
             selected ? (
               <SelectOptionContent option={selected} />
@@ -127,7 +207,7 @@ export function SelectField({
               <span className="truncate text-muted">{placeholder}</span>
             )
           ) : selectedMultiOptions.length > 0 ? (
-            <span className="truncate">
+            <span className="truncate text-sm">
               {showCountOnly
                 ? `${selectedMultiOptions.length} selected`
                 : selectedMultiOptions.map((o) => o.label).join(", ")}
@@ -149,7 +229,9 @@ export function SelectField({
               style={{ top: box.top, left: box.left, width: box.width }}
             >
               {options.map((option) => {
-                const isSelected = multiple ? selectedMulti.includes(option.value) : option.value === value;
+                const isSelected = multiple
+                  ? selectedMulti.includes(option.value)
+                  : option.value === fieldValue;
                 return (
                   <li key={option.value}>
                     <button
@@ -167,8 +249,7 @@ export function SelectField({
                           setSelectedMulti(newMulti);
                           onChangeMultiple?.(newMulti);
                         } else {
-                          setValue(option.value);
-                          onChange?.(option.value);
+                          commitSingle(option.value);
                           setOpen(false);
                         }
                       }}

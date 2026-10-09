@@ -30,7 +30,7 @@ export async function prepareOdometerImageForStorage(file: File): Promise<Prepar
     const compressed = await sharp(input)
       .rotate()
       .resize({ width: MAX_EDGE, height: MAX_EDGE, fit: "inside", withoutEnlargement: true })
-      .jpeg({ quality: JPEG_QUALITY, mozjpeg: true })
+      .jpeg({ quality: JPEG_QUALITY })
       .toBuffer();
 
     if (compressed.length < input.length) {

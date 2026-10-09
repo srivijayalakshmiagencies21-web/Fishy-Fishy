@@ -14,6 +14,7 @@ import { createClient } from "@/lib/supabase/server";
 import { splitStartAndTransferTruckIds } from "@/lib/transfer-truck-split";
 import { revalidatePath } from "next/cache";
 import { invalidateJourneyCaches } from "@/lib/cache-tags.server";
+import { isValidMobile } from "@/lib/phone";
 
 /** Start transfer — closes Start page lane and opens Transfer in progress. */
 export async function startTransfer(journeyId: string) {
@@ -74,6 +75,10 @@ export async function recordTransfer(state: unknown, formData: FormData) {
     }>;
   };
 
+  if ((payload.trucks ?? []).some((truck) => !isValidMobile(truck.driver_phone))) {
+    return { success: false, error: "Driver mobile must be a 10-digit number." };
+  }
+
   const { data: secondaryTrucks, error: secondaryFetchError } = await supabase
     .from("journey_trucks" as any)
     .select("id")
@@ -115,20 +120,28 @@ export async function recordTransfer(state: unknown, formData: FormData) {
 
   const primaryIds = new Set(primaryNumbers.keys());
 
-  for (const [truckId, arrival] of Object.entries(payload.arrivals)) {
-    if (!primaryIds.has(truckId)) continue;
+  const arrivalEntries = Object.entries(payload.arrivals).filter(([truckId]) => primaryIds.has(truckId));
+  const arrivalTruckIds = arrivalEntries.map(([id]) => id);
+  const { data: primaryRows } = await supabase
+    .from("journey_trucks")
+    .select(
+      "id, vehicle_number, odometer_reading, odometer_image_path, start_odometer_reading, start_odometer_image_path, transfer_odometer_reading, final_odometer_reading",
+    )
+    .in("id", arrivalTruckIds);
+  const primaryRowById = new Map<string, any>(
+    ((primaryRows as any[]) ?? []).map((r: any) => [r.id as string, r]),
+  );
+  const vehicleByTruckId = new Map<string, string>(
+    ((primaryRows as any[]) ?? []).map((r: any) => [r.id as string, r.vehicle_number as string]),
+  );
 
-    let odometer_image_path: string | null = arrival.existingOdometerImagePath ?? null;
-    const odometer_image = formDataFile(formData, `arrival_image_${truckId}`);
-    if (odometer_image) {
-      try {
+  const uploadedArrivals = await Promise.all(
+    arrivalEntries.map(async ([truckId, arrival]) => {
+      let odometer_image_path: string | null = arrival.existingOdometerImagePath ?? null;
+      const odometer_image = formDataFile(formData, `arrival_image_${truckId}`);
+      if (odometer_image) {
         const primaryTruckNumber = primaryNumbers.get(truckId) ?? 1;
-        const { data: primaryRow } = await supabase
-          .from("journey_trucks")
-          .select("vehicle_number")
-          .eq("id", truckId)
-          .maybeSingle();
-        const vehicleNumber = primaryRow?.vehicle_number ?? "UNKNOWN";
+        const vehicleNumber = vehicleByTruckId.get(truckId) ?? "UNKNOWN";
         const objectPath = odometerImageObjectPath({
           journeyNumber,
           truckSegment: `PT${primaryTruckNumber}`,
@@ -138,140 +151,152 @@ export async function recordTransfer(state: unknown, formData: FormData) {
           file: odometer_image,
         });
         odometer_image_path = await uploadOdometerImageStored(supabase, odometer_image, objectPath);
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : "Upload failed." };
       }
-    }
+      return { truckId, arrival, odometer_image_path };
+    })
+  );
 
+  for (const { odometer_image_path } of uploadedArrivals) {
     if (!odometer_image_path) {
       return { success: false, error: "Odometer capture is required for each primary truck at transfer." };
     }
-
-    const { data: existingPrimary } = await supabase
-      .from("journey_trucks" as any)
-      .select(
-        "odometer_reading, odometer_image_path, start_odometer_reading, start_odometer_image_path, transfer_odometer_reading, final_odometer_reading",
-      )
-      .eq("id", truckId)
-      .maybeSingle();
-
-    const startOdometer = snapshotStartBeforeTransfer(existingPrimary ?? {});
-    const startImagePath =
-      existingPrimary?.start_odometer_image_path ??
-      (existingPrimary?.odometer_image_path && /\/SP\//.test(existingPrimary.odometer_image_path)
-        ? existingPrimary.odometer_image_path
-        : null);
-
-    const { error } = await supabase
-      .from("journey_trucks" as any)
-      .update({
-        odometer_reading: arrival.odometer_reading,
-        start_odometer_reading: startOdometer,
-        ...(startImagePath ? { start_odometer_image_path: startImagePath } : {}),
-        transfer_odometer_reading: arrival.odometer_reading,
-        transfer_odometer_image_path: odometer_image_path,
-        ...(odometer_image_path ? { odometer_image_path } : {}),
-      } as any)
-      .eq("id", truckId);
-
-    if (error) {
-      return { success: false, error: error.message };
-    }
   }
 
-  const itemsByTruck = new Map<string, Array<{ supplier_id: number; fish_id: number; quantity: number }>>();
-  for (const row of payload.primary_items) {
-    const qty = row.quantity === "" ? 0 : Number(row.quantity) || 0;
-    const list = itemsByTruck.get(row.truck_id) ?? [];
-    list.push({ supplier_id: row.supplier_id, fish_id: row.fish_id, quantity: qty });
-    itemsByTruck.set(row.truck_id, list);
+  const primaryUpdateResults = await Promise.all(
+    uploadedArrivals.map(async ({ truckId, arrival, odometer_image_path }) => {
+      const existingPrimary = primaryRowById.get(truckId) ?? {};
+      const startOdometer = snapshotStartBeforeTransfer(existingPrimary);
+      const startImagePath =
+        existingPrimary.start_odometer_image_path ??
+        (existingPrimary.odometer_image_path && /\/SP\//.test(existingPrimary.odometer_image_path)
+          ? existingPrimary.odometer_image_path
+          : null);
+
+      const { error } = await supabase
+        .from("journey_trucks" as any)
+        .update({
+          odometer_reading: arrival.odometer_reading,
+          start_odometer_reading: startOdometer,
+          ...(startImagePath ? { start_odometer_image_path: startImagePath } : {}),
+          transfer_odometer_reading: arrival.odometer_reading,
+          transfer_odometer_image_path: odometer_image_path,
+          ...(odometer_image_path ? { odometer_image_path } : {}),
+        } as any)
+        .eq("id", truckId);
+
+      return error?.message ?? null;
+    }),
+  );
+
+  const primaryUpdateError = primaryUpdateResults.find((message) => message !== null);
+  if (primaryUpdateError) {
+    return { success: false, error: primaryUpdateError };
   }
 
-  for (const truckId of new Set(payload.primary_items.map((row) => row.truck_id))) {
-    await supabase.from("truck_items" as any).delete().eq("truck_id", truckId);
-    const items = itemsByTruck.get(truckId) ?? [];
-    if (items.length > 0) {
-      const { error } = await supabase.from("truck_items" as any).insert(
-        items.map((item) => ({ truck_id: truckId, ...item })) as any,
-      );
-      if (error) return { success: false, error: error.message };
-    }
+  const primaryTruckIds = [...new Set(payload.primary_items.map((row) => row.truck_id))];
+  if (primaryTruckIds.length > 0) {
+    const { error: deleteItemsError } = await supabase
+      .from("truck_items" as any)
+      .delete()
+      .in("truck_id", primaryTruckIds);
+    if (deleteItemsError) return { success: false, error: deleteItemsError.message };
   }
 
+  const primaryItemRows = payload.primary_items.map((row) => ({
+    truck_id: row.truck_id,
+    supplier_id: row.supplier_id,
+    fish_id: row.fish_id,
+    quantity: row.quantity === "" ? 0 : Number(row.quantity) || 0,
+  }));
+
+  if (primaryItemRows.length > 0) {
+    const { error: insertItemsError } = await supabase.from("truck_items" as any).insert(primaryItemRows as any);
+    if (insertItemsError) return { success: false, error: insertItemsError.message };
+  }
+
+  const activeSecondaries = payload.trucks.filter((truck) =>
+    truck.items.some((item) => item.quantity !== "" && Number(item.quantity) > 0),
+  );
   const secondaryBatchIndex = new Map<string, number>();
+  const activeSecondariesWithIndex = activeSecondaries.map((truck) => {
+    const primaryId = truck.primary_truck_id ?? "";
+    const batchOffset = secondaryBatchIndex.get(primaryId) ?? 0;
+    secondaryBatchIndex.set(primaryId, batchOffset + 1);
+    return { truck, batchOffset };
+  });
 
-  for (const truck of payload.trucks) {
-    if (!truck.items.some((item) => item.quantity !== "" && Number(item.quantity) > 0)) continue;
+  const secondaryResults = await Promise.all(
+    activeSecondariesWithIndex.map(async ({ truck, batchOffset }) => {
+      let odometer_image_path: string | null = truck.existingOdometerImagePath ?? null;
+      const odometer_image = formDataFile(formData, `odometer_image_${truck.id}`);
+      if (odometer_image) {
+        try {
+          const primaryId = truck.primary_truck_id ?? "";
+          const primaryTruckNumber = primaryNumbers.get(primaryId) ?? 1;
 
-    let odometer_image_path: string | null = truck.existingOdometerImagePath ?? null;
-    const odometer_image = formDataFile(formData, `odometer_image_${truck.id}`);
-    if (odometer_image) {
-      try {
-        const primaryId = truck.primary_truck_id ?? "";
-        const primaryTruckNumber = primaryNumbers.get(primaryId) ?? 1;
-        const { count: existingSecondaries } = await supabase
-          .from("journey_trucks")
-          .select("*", { count: "exact", head: true })
-          .eq("primary_truck_id", primaryId);
-        const batchOffset = secondaryBatchIndex.get(primaryId) ?? 0;
-        secondaryBatchIndex.set(primaryId, batchOffset + 1);
-        const secondaryIndex = (existingSecondaries ?? 0) + batchOffset;
-
-        const objectPath = odometerImageObjectPath({
-          journeyNumber,
-          truckSegment: secondaryTruckStorageLabel(primaryTruckNumber, secondaryIndex),
-          vehicleNumber: truck.vehicle_number,
-          pointCode: "TP",
-          odometerReading: truck.odometer_reading,
-          file: odometer_image,
-        });
-        odometer_image_path = await uploadOdometerImageStored(supabase, odometer_image, objectPath);
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : "Upload failed." };
+          const objectPath = odometerImageObjectPath({
+            journeyNumber,
+            truckSegment: secondaryTruckStorageLabel(primaryTruckNumber, batchOffset),
+            vehicleNumber: truck.vehicle_number,
+            pointCode: "TP",
+            odometerReading: truck.odometer_reading,
+            file: odometer_image,
+          });
+          odometer_image_path = await uploadOdometerImageStored(supabase, odometer_image, objectPath);
+        } catch (err) {
+          return { error: err instanceof Error ? err.message : "Upload failed." };
+        }
       }
-    }
 
-    if (!odometer_image_path) {
-      return { success: false, error: "Odometer capture is required for each secondary truck." };
-    }
+      if (!odometer_image_path) {
+        return { error: "Odometer capture is required for each secondary truck." };
+      }
 
-    const { data: inserted, error: truckError } = await supabase
-      .from("journey_trucks" as any)
-      .insert({
-        journey_id: journeyId,
-        primary_truck_id: truck.primary_truck_id ?? null,
-        location_name: payload.transfer_location_name,
-        district_id: payload.transfer_district_id,
-        transporter_id: truck.transporter_id,
-        vehicle_number: truck.vehicle_number,
-        driver_name: truck.driver_name,
-        driver_phone: truck.driver_phone,
-        odometer_reading: truck.odometer_reading,
-        transfer_odometer_reading: truck.odometer_reading,
-        transfer_odometer_image_path: odometer_image_path,
-        end_type: "FINAL_POINT",
-        odometer_image_path,
-      } as any)
-      .select("id")
-      .single();
+      const { data: inserted, error: truckError } = await supabase
+        .from("journey_trucks" as any)
+        .insert({
+          journey_id: journeyId,
+          primary_truck_id: truck.primary_truck_id ?? null,
+          location_name: payload.transfer_location_name,
+          district_id: payload.transfer_district_id,
+          transporter_id: truck.transporter_id,
+          vehicle_number: truck.vehicle_number,
+          driver_name: truck.driver_name,
+          driver_phone: truck.driver_phone,
+          odometer_reading: truck.odometer_reading,
+          transfer_odometer_reading: truck.odometer_reading,
+          transfer_odometer_image_path: odometer_image_path,
+          end_type: "FINAL_POINT",
+          odometer_image_path,
+        } as any)
+        .select("id")
+        .single();
 
-    if (truckError || !inserted) {
-      return { success: false, error: truckError?.message ?? "Could not save secondary truck." };
-    }
+      if (truckError || !inserted) {
+        return { error: truckError?.message ?? "Could not save secondary truck." };
+      }
 
-    const items = truck.items
-      .filter((item) => item.quantity !== "" && Number(item.quantity) > 0)
-      .map((item) => ({
-        truck_id: inserted.id,
-        supplier_id: item.supplier_id,
-        fish_id: item.fish_id,
-        quantity: Number(item.quantity),
-      }));
+      const items = truck.items
+        .filter((item) => item.quantity !== "" && Number(item.quantity) > 0)
+        .map((item) => ({
+          truck_id: inserted.id,
+          supplier_id: item.supplier_id,
+          fish_id: item.fish_id,
+          quantity: Number(item.quantity),
+        }));
 
-    if (items.length > 0) {
-      const { error: itemsError } = await supabase.from("truck_items" as any).insert(items as any);
-      if (itemsError) return { success: false, error: itemsError.message };
-    }
+      if (items.length > 0) {
+        const { error: itemsError } = await supabase.from("truck_items" as any).insert(items as any);
+        if (itemsError) return { error: itemsError.message };
+      }
+
+      return { error: null };
+    }),
+  );
+
+  const secondaryError = secondaryResults.find((result) => result.error)?.error;
+  if (secondaryError) {
+    return { success: false, error: secondaryError };
   }
 
   const { error: phaseError } = await supabase

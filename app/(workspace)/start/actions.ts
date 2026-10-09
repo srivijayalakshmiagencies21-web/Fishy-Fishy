@@ -6,6 +6,7 @@ import { JourneyPhase, normalizeJourneyPhase } from "@/lib/journey-phase";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { invalidateJourneyCaches } from "@/lib/cache-tags.server";
+import { isValidMobile } from "@/lib/phone";
 
 export async function createJourney(state: unknown, formData: FormData) {
   try {
@@ -17,6 +18,10 @@ export async function createJourney(state: unknown, formData: FormData) {
   const payload = JSON.parse(payloadStr);
   const { route, trucks } = payload;
   const db_id = formData.get("db_id") as string | null;
+
+  if ((trucks ?? []).some((truck: { driver_phone?: string }) => !isValidMobile(truck.driver_phone))) {
+    return { success: false, error: "Driver mobile must be a 10-digit number." };
+  }
 
   let journeyId = db_id;
 
@@ -68,13 +73,11 @@ export async function createJourney(state: unknown, formData: FormData) {
 
   const journeyNumber = await resolveJourneyNumber(supabase, journeyId!);
 
-  for (let truckIndex = 0; truckIndex < trucks.length; truckIndex++) {
-    const truck = trucks[truckIndex];
-    let odometer_image_path: string | null = truck.existingOdometerImagePath ?? null;
-
-    const odometer_image = formDataFile(formData, `odometer_image_${truck.id}`);
-    if (odometer_image) {
-      try {
+  const uploadedPaths = await Promise.all(
+    trucks.map(async (truck: any, truckIndex: number) => {
+      let odometer_image_path: string | null = truck.existingOdometerImagePath ?? null;
+      const odometer_image = formDataFile(formData, `odometer_image_${truck.id}`);
+      if (odometer_image) {
         const objectPath = odometerImageObjectPath({
           journeyNumber,
           truckSegment: `PT${truckIndex + 1}`,
@@ -84,50 +87,65 @@ export async function createJourney(state: unknown, formData: FormData) {
           file: odometer_image,
         });
         odometer_image_path = await uploadOdometerImageStored(supabase, odometer_image, objectPath);
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : "Failed to upload odometer photo." };
       }
-    }
+      return odometer_image_path;
+    })
+  );
 
-    if (!odometer_image_path) {
-      return { success: false, error: "Odometer capture is required for each truck." };
-    }
+  const truckSaveResults = await Promise.all(
+    trucks.map(async (truck: any, truckIndex: number) => {
+      const odometer_image_path = uploadedPaths[truckIndex];
 
-    const resTruck = await supabase.from("journey_trucks" as any).insert({
-       journey_id: journeyId,
-       location_name: route.location_name,
-       district_id: route.district_id,
-       transporter_id: truck.transporter_id,
-       vehicle_number: truck.vehicle_number,
-       driver_name: truck.driver_name,
-       driver_phone: truck.driver_phone,
-       odometer_reading: truck.odometer_reading,
-       start_odometer_reading: truck.odometer_reading,
-       start_odometer_image_path: odometer_image_path,
-       end_type: truck.end_type,
-       odometer_image_path: odometer_image_path
-    } as any).select("id").single();
-    
-    if (resTruck.error) return { success: false, error: "Failed to insert truck: " + resTruck.error.message };
-    
-    const truckDbId = (resTruck.data as any).id;
+      if (!odometer_image_path) {
+        return { error: "Odometer capture is required for each truck." };
+      }
 
-    const items: any[] = [];
-    truck.items.forEach((item: any) => {
-      item.fishes.forEach((fish: any) => {
-        items.push({
-          truck_id: truckDbId,
-          supplier_id: item.supplier_id,
-          fish_id: fish.fish_id,
-          quantity: fish.quantity
+      const resTruck = await supabase.from("journey_trucks" as any).insert({
+        journey_id: journeyId,
+        location_name: route.location_name,
+        district_id: route.district_id,
+        transporter_id: truck.transporter_id,
+        vehicle_number: truck.vehicle_number,
+        driver_name: truck.driver_name,
+        driver_phone: truck.driver_phone,
+        odometer_reading: truck.odometer_reading,
+        start_odometer_reading: truck.odometer_reading,
+        start_odometer_image_path: odometer_image_path,
+        end_type: truck.end_type,
+        odometer_image_path: odometer_image_path,
+      } as any).select("id").single();
+
+      if (resTruck.error) {
+        return { error: "Failed to insert truck: " + resTruck.error.message };
+      }
+
+      const truckDbId = (resTruck.data as any).id;
+      const items: any[] = [];
+      truck.items.forEach((item: any) => {
+        item.fishes.forEach((fish: any) => {
+          items.push({
+            truck_id: truckDbId,
+            supplier_id: item.supplier_id,
+            fish_id: fish.fish_id,
+            quantity: fish.quantity,
+          });
         });
       });
-    });
 
-    if (items.length > 0) {
-      const resItems = await supabase.from("truck_items" as any).insert(items as any);
-      if (resItems.error) return { success: false, error: "Failed to insert truck items: " + resItems.error.message };
-    }
+      if (items.length > 0) {
+        const resItems = await supabase.from("truck_items" as any).insert(items as any);
+        if (resItems.error) {
+          return { error: "Failed to insert truck items: " + resItems.error.message };
+        }
+      }
+
+      return { error: null };
+    }),
+  );
+
+  const startSaveError = truckSaveResults.find((result) => result.error)?.error;
+  if (startSaveError) {
+    return { success: false, error: startSaveError };
   }
 
   revalidatePath("/transfer");

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fishy-fishy-pwa-v1';
+const CACHE_NAME = 'fishy-fishy-pwa-v2';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

@@ -42,6 +42,7 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
     .filter((item) => pages.includes(item.key) || (item.key === "users" && role === "Manager"))
     .map((item) => {
       let shortLabel: string = item.label;
+      if (item.key === "finance") shortLabel = "Finance";
       if (item.key === "start") shortLabel = "Start";
       if (item.key === "transfer") shortLabel = "Transfer";
       if (item.key === "final") shortLabel = "Final";
@@ -88,6 +89,29 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
     const tick = () => setNow(new Date());
     const id = window.setInterval(tick, 30000);
     return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    document.querySelector(".canvas-body")?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [pathname]);
+
+  useEffect(() => {
+    const blockWheelOnFocusedNumber = (event: WheelEvent) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) return;
+      if (document.activeElement !== target) return;
+      if (
+        target.type === "number" ||
+        target.inputMode === "numeric" ||
+        target.inputMode === "decimal"
+      ) {
+        event.preventDefault();
+        target.blur();
+      }
+    };
+    document.addEventListener("wheel", blockWheelOnFocusedNumber, { passive: false });
+    return () =>
+      document.removeEventListener("wheel", blockWheelOnFocusedNumber, { passive: false } as EventListenerOptions);
   }, []);
 
   async function onSignOut() {
@@ -299,6 +323,7 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
 
 function NavIcon({ name }: { name: string }) {
   if (name === "overview") return <OverviewIcon />;
+  if (name === "finance") return <FinanceIcon />;
   if (name === "masters") return <MastersIcon />;
   if (name === "users") return <UsersIcon />;
   if (name === "start") return <StartIcon />;
@@ -311,6 +336,18 @@ function OverviewIcon() {
     <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
       <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
+    </svg>
+  );
+}
+
+function FinanceIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M6 3h12" />
+      <path d="M6 8h12" />
+      <path d="m6 13 8.5 8" />
+      <path d="M6 13h3" />
+      <path d="M9 13c6.667 0 6.667-10 0-10" />
     </svg>
   );
 }

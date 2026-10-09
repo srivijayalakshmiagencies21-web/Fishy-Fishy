@@ -22,6 +22,9 @@ export default async function MasterPage({
   }
 
   const { slug } = await params;
+  if (slug === "expenses" || slug === "transaction-categories") {
+    redirect("/masters/transactions");
+  }
   const { error } = await searchParams;
   const master = getMasterLink(slug);
 

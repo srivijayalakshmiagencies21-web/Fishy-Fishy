@@ -8,6 +8,7 @@ import type { VendorType } from "@/supabase/database.types";
 import { getMasterLink } from "@/lib/master-links";
 import { readableError, type MasterData } from "@/lib/masters";
 import { createClient } from "@/lib/supabase/server";
+import { isValidMobile } from "@/lib/phone";
 
 export type FormState = { error: string } | null;
 
@@ -81,16 +82,77 @@ export async function createPaymentMode(_state: FormState, formData: FormData): 
   return null;
 }
 
-export async function createExpense(_state: FormState, formData: FormData): Promise<FormState> {
-  const towards = text(formData, "towards");
-  if (!towards) return { error: "Enter what the expense is towards." };
+const TRANSACTION_TYPES = new Set(["in", "out", "both"]);
+const COST_NATURES = new Set([
+  "Direct",
+  "Overhead",
+  "Revenue",
+  "Non-Cost",
+]);
+const DEFAULT_ALLOCATIONS = new Set(["company", "ask", "project"]);
+
+function parseTransactionCategory(formData: FormData):
+  | { ok: false; error: string }
+  | {
+      ok: true;
+      payload: {
+        name: string;
+        transaction_type: string;
+        cost_nature: string;
+        default_allocation: string;
+        active: boolean;
+      };
+    } {
+  const name = text(formData, "name");
+  const transaction_type = text(formData, "transaction_type");
+  const cost_nature = text(formData, "cost_nature");
+  const default_allocation = text(formData, "default_allocation");
+
+  if (!name) return { ok: false, error: "Enter a category name." };
+  if (!TRANSACTION_TYPES.has(transaction_type)) {
+    return { ok: false, error: "Choose a valid transaction type." };
+  }
+  if (!COST_NATURES.has(cost_nature)) return { ok: false, error: "Choose a valid cost nature." };
+  if (!DEFAULT_ALLOCATIONS.has(default_allocation)) return { ok: false, error: "Choose a valid default allocation." };
+
+  return {
+    ok: true,
+    payload: {
+      name,
+      transaction_type,
+      cost_nature,
+      default_allocation,
+      active: true,
+    },
+  };
+}
+
+export async function createTransactionCategory(_state: FormState, formData: FormData): Promise<FormState> {
+  const parsed = parseTransactionCategory(formData);
+  if (!parsed.ok) return { error: parsed.error };
 
   const supabase = await createClient();
-  const { error } = await supabase.from("expenses").insert({ towards });
+  const { error } = await supabase.from("transaction_categories").insert(parsed.payload);
   if (error) return fail(error.message);
 
-  revalidatePath("/masters/expenses");
-  invalidateMasterCache("expenses");
+  revalidatePath("/masters/transactions");
+  invalidateMasterCache("transactions");
+  return null;
+}
+
+export async function updateTransactionCategory(_state: FormState, formData: FormData): Promise<FormState> {
+  const id = Number(formData.get("id"));
+  if (!id) return { error: "Missing category." };
+
+  const parsed = parseTransactionCategory(formData);
+  if (!parsed.ok) return { error: parsed.error };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("transaction_categories").update(parsed.payload).eq("id", id);
+  if (error) return fail(error.message);
+
+  revalidatePath("/masters/transactions");
+  invalidateMasterCache("transactions");
   return null;
 }
 
@@ -101,6 +163,10 @@ export async function createVendor(_state: FormState, formData: FormData): Promi
 
   if (!name || !contactNumber || !vendorType) {
     return { error: "Enter the vendor name, contact number, and type." };
+  }
+
+  if (!isValidMobile(contactNumber)) {
+    return { error: "Contact number must be a 10-digit number." };
   }
 
   if (vendorType !== "Supplier" && vendorType !== "Transporter") {
@@ -201,7 +267,14 @@ export async function tagCompany(_state: FormState, formData: FormData): Promise
 }
 
 async function removeRow(
-  table: "accounts" | "payment_modes" | "expenses" | "vendors" | "fishes" | "districts" | "societies",
+  table:
+    | "accounts"
+    | "payment_modes"
+    | "transaction_categories"
+    | "vendors"
+    | "fishes"
+    | "districts"
+    | "societies",
   id: number,
   path: string,
 ) {
@@ -223,8 +296,8 @@ export async function deletePaymentMode(formData: FormData) {
   await removeRow("payment_modes", Number(formData.get("id")), "/masters/payment-modes");
 }
 
-export async function deleteExpense(formData: FormData) {
-  await removeRow("expenses", Number(formData.get("id")), "/masters/expenses");
+export async function deleteTransactionCategory(formData: FormData) {
+  await removeRow("transaction_categories", Number(formData.get("id")), "/masters/transactions");
 }
 
 export async function deleteVendor(formData: FormData) {

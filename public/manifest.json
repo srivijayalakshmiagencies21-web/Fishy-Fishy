@@ -3,7 +3,7 @@
   "short_name": "Fishy-Fishy",
   "description": "Fish seed loading, transfer, and unload logistics management app.",
   "start_url": "/",
-  "id": "fishy-fishy-pwa-v1",
+  "id": "fishy-fishy-pwa-v2",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0f4c81",

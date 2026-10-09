@@ -10,6 +10,7 @@ import {
   laneViewShowsInProgress,
   type JourneyPointLaneView,
 } from "@/components/journey-point-lane-toggle";
+import { hasPersistedTransferRecording } from "@/lib/journey-transfer-recording";
 import { JourneyPhase, normalizeJourneyPhase, type JourneyPhaseValue } from "@/lib/journey-phase";
 import type { OverviewStage } from "@/lib/overview-stage-summary";
 import type { OverviewJourneyRow } from "@/lib/overview-types";
@@ -25,33 +26,47 @@ type Stop = {
   position: number;
 };
 
-function phaseProgressIndex(phase: JourneyPhaseValue, skip: boolean) {
+function phaseProgressIndex(
+  phase: JourneyPhaseValue,
+  skip: boolean,
+  transferRecorded: boolean,
+) {
   if (skip) {
     if (phase === JourneyPhase.Start || phase === JourneyPhase.Transfer) return 0;
     if (phase === JourneyPhase.Final) return 1;
     return 2;
   }
   if (phase === JourneyPhase.Start) return 0;
-  if (phase === JourneyPhase.Transfer) return 1;
+  if (phase === JourneyPhase.Transfer) return transferRecorded ? 2 : 1;
   if (phase === JourneyPhase.Final) return 2;
   return 3;
 }
 
-function stopStatus(stopIndex: number, phase: JourneyPhaseValue, skip: boolean): StopStatus {
+function stopStatus(
+  stopIndex: number,
+  phase: JourneyPhaseValue,
+  skip: boolean,
+  transferRecorded: boolean,
+): StopStatus {
   if (phase === JourneyPhase.Closed) return "done";
-  const progress = phaseProgressIndex(phase, skip);
+  const progress = phaseProgressIndex(phase, skip, transferRecorded);
   if (stopIndex < progress) return "done";
   if (stopIndex === progress) return "active";
   return "upcoming";
 }
 
-function truckPosition(phase: JourneyPhaseValue, skip: boolean) {
+/** Truck marker along the leg: start→transfer (25%), at transfer (50%), transfer→final (75%), at final (100%). */
+function truckPosition(
+  phase: JourneyPhaseValue,
+  skip: boolean,
+  transferRecorded: boolean,
+) {
   if (skip) {
     if (phase === JourneyPhase.Start || phase === JourneyPhase.Transfer) return 50;
     return 100;
   }
   if (phase === JourneyPhase.Start) return 25;
-  if (phase === JourneyPhase.Transfer) return 50;
+  if (phase === JourneyPhase.Transfer) return transferRecorded ? 75 : 50;
   return 100;
 }
 
@@ -59,9 +74,13 @@ function movingTruckCount(
   phase: JourneyPhaseValue,
   skip: boolean,
   counts: OverviewJourneyRow["truckCounts"],
+  transferRecorded: boolean,
 ) {
   if (phase === JourneyPhase.Start) return counts.start;
-  if (phase === JourneyPhase.Transfer) return skip ? counts.start : counts.transfer;
+  if (phase === JourneyPhase.Transfer) {
+    if (transferRecorded) return counts.final;
+    return skip ? counts.start : counts.transfer;
+  }
   return counts.final;
 }
 
@@ -70,7 +89,11 @@ function formatTrucks(n: number) {
   return `${n} truck${n === 1 ? "" : "s"}`;
 }
 
-function buildStops(journey: OverviewJourneyRow, phase: JourneyPhaseValue): Stop[] {
+function buildStops(
+  journey: OverviewJourneyRow,
+  phase: JourneyPhaseValue,
+  transferRecorded: boolean,
+): Stop[] {
   const skip = journey.skipsTransfer;
   const { start, transfer, final } = journey.truckCounts;
   const stops: Stop[] = [
@@ -89,7 +112,7 @@ function buildStops(journey: OverviewJourneyRow, phase: JourneyPhaseValue): Stop
       title: "Transfer",
       caption: journey.transferLocation,
       truckCount: transfer,
-      status: stopStatus(1, phase, skip),
+      status: stopStatus(1, phase, skip, transferRecorded),
       position: 50,
     });
   }
@@ -98,7 +121,7 @@ function buildStops(journey: OverviewJourneyRow, phase: JourneyPhaseValue): Stop
     title: "Final",
     caption: journey.finalDistrict,
     truckCount: final,
-    status: stopStatus(skip ? 1 : 2, phase, skip),
+    status: stopStatus(skip ? 1 : 2, phase, skip, transferRecorded),
     position: 100,
   });
   return stops;
@@ -152,9 +175,15 @@ function JourneyTrack({
   onOpenStage: (stage: OverviewStage) => void;
 }) {
   const phase = normalizeJourneyPhase(journey.phase);
-  const stops = buildStops(journey, phase);
-  const position = truckPosition(phase, journey.skipsTransfer);
-  const badgeCount = movingTruckCount(phase, journey.skipsTransfer, journey.truckCounts);
+  const transferRecorded = hasPersistedTransferRecording(journey);
+  const stops = buildStops(journey, phase, transferRecorded);
+  const position = truckPosition(phase, journey.skipsTransfer, transferRecorded);
+  const badgeCount = movingTruckCount(
+    phase,
+    journey.skipsTransfer,
+    journey.truckCounts,
+    transferRecorded,
+  );
   const isClosed = phase === JourneyPhase.Closed;
 
   const openStage = (stage: OverviewStage) => {

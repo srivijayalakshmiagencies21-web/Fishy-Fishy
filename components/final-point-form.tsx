@@ -8,16 +8,24 @@ import {
   useMemo,
   useRef,
   useState,
-  useTransition,
+  startTransition,
   type ReactNode,
   type UIEvent,
 } from "react";
 import { createPortal } from "react-dom";
-import { recordUnload, startFinalUnload } from "@/app/(workspace)/final/actions";
+import {
+  deleteFinalUnloadRecording,
+  recordUnload,
+  startFinalUnload,
+} from "@/app/(workspace)/final/actions";
+import { scrollCanvasToTop } from "@/lib/scroll-canvas";
+import { FloatingAddButton } from "@/components/floating-add-button";
 import { compressOdometerPhotoClient } from "@/lib/odometer-image-compress.client";
+import { submitCompressedFormAction } from "@/lib/submit-compressed-form-action";
 import { formDataFile } from "@/lib/odometer-image";
 import { formatOdometerDisplayLabel } from "@/lib/odometer-display";
-import { QuantityInput } from "@/components/quantity-input";
+import { FishQuantityRow } from "@/components/fish-quantity-row";
+import { NumericFieldInput } from "@/components/quantity-input";
 import { JourneySummaryCard } from "@/components/journey-summary-card";
 import { SelectField } from "@/components/select-field";
 import { trucksForFinalUnload, type JourneySummary } from "@/lib/journey-cards";
@@ -69,6 +77,7 @@ type UnloadDrop = {
   /** Typed society name when not chosen from masters (saved to district on submit). */
   society_name?: string;
   lines: UnloadDropLine[];
+  submitted?: boolean;
 };
 
 type TruckUnload = {
@@ -115,6 +124,7 @@ function normalizeUnloadDrop(raw: unknown): UnloadDrop {
   const id = typeof row.id === "string" ? row.id : generateId();
   const society_id = typeof row.society_id === "number" ? row.society_id : null;
   const society_name = typeof row.society_name === "string" ? row.society_name.trim() || undefined : undefined;
+  const submitted = Boolean(row.submitted);
   if (Array.isArray(row.lines)) {
     const lines = row.lines
       .map((line) => {
@@ -127,7 +137,7 @@ function normalizeUnloadDrop(raw: unknown): UnloadDrop {
         } satisfies UnloadDropLine;
       })
       .filter(Boolean) as UnloadDropLine[];
-    return { id, society_id, society_name, lines };
+    return { id, society_id, society_name, lines, submitted };
   }
   if (typeof row.itemKey === "string") {
     const quantity = row.quantity;
@@ -136,9 +146,10 @@ function normalizeUnloadDrop(raw: unknown): UnloadDrop {
       society_id,
       society_name,
       lines: [{ itemKey: row.itemKey, quantity: quantity === "" || typeof quantity === "number" ? quantity : "" }],
+      submitted,
     };
   }
-  return { id, society_id, society_name, lines: [] };
+  return { id, society_id, society_name, lines: [], submitted };
 }
 
 function truckProgressPercent(truck: any, drops: UnloadDrop[]) {
@@ -165,7 +176,10 @@ function draftFromRecordedUnload(journey: JourneySummary, saved?: UnloadDraft | 
     if (!truck.id) continue;
     const savedTruck = saved?.trucks[truck.id];
     trucks[truck.id] = {
-      drops: (savedTruck?.drops ?? []).map(normalizeUnloadDrop),
+      drops: (savedTruck?.drops ?? []).map((d) => ({
+        ...normalizeUnloadDrop(d),
+        submitted: true,
+      })),
       ...finalOdometerFieldsFromTruck(truck),
     };
   }
@@ -237,6 +251,23 @@ function dropIsComplete(drop: UnloadDrop) {
   return drop.lines.every((line) => line.quantity !== "" && Number(line.quantity) > 0);
 }
 
+function societyDropAddMeta(truck: any, truckUnload: TruckUnload) {
+  const items = truckItems(truck);
+  const lastDrop = truckUnload.drops[truckUnload.drops.length - 1];
+  const canAddDrop =
+    items.length > 0 &&
+    (truckUnload.drops.length === 0 || (lastDrop && dropIsComplete(lastDrop) && Boolean(lastDrop.submitted)));
+  let title = "Add another society drop";
+  if (!canAddDrop) {
+    if (lastDrop && !lastDrop.submitted) {
+      title = `Submit Society #${truckUnload.drops.length} before adding another`;
+    } else {
+      title = "Complete current drop (society, fish lines, quantities) to add another";
+    }
+  }
+  return { canAddDrop, title };
+}
+
 function societyDisplayText(
   drop: UnloadDrop,
   societies: { id: number; label: string }[],
@@ -250,10 +281,12 @@ function societyDisplayText(
 function SocietyField({
   societies,
   drop,
+  disabled = false,
   onChange,
 }: {
   societies: { id: number; label: string }[];
   drop: UnloadDrop;
+  disabled?: boolean;
   onChange: (patch: Pick<UnloadDrop, "society_id" | "society_name">) => void;
 }) {
   const listId = useId();
@@ -327,13 +360,15 @@ function SocietyField({
         autoComplete="off"
         name={`society_${drop.id}`}
         required
-        className={`${FIELD_INPUT} h-[38px] min-h-[38px] py-0`}
+        disabled={disabled}
+        className={`${FIELD_INPUT} h-[38px] min-h-[38px] py-0 disabled:bg-gray-100 disabled:text-gray-700 disabled:cursor-not-allowed disabled:border-gray-200`}
         value={text}
         placeholder="Type society name…"
         aria-autocomplete="list"
         aria-controls={matches.length > 0 ? listId : undefined}
         aria-expanded={open && matches.length > 0}
         onChange={(e) => {
+          if (disabled) return;
           const next = e.target.value;
           setText(next);
           setOpen(true);
@@ -351,15 +386,17 @@ function SocietyField({
           onChange({ society_id: null, society_name: trimmed });
         }}
         onFocus={() => {
+          if (disabled) return;
           setOpen(true);
           placeMenu();
         }}
         onBlur={(e) => {
+          if (disabled) return;
           window.setTimeout(() => setOpen(false), 120);
           commitValue(e.target.value);
         }}
       />
-      {open && box && matches.length > 0
+      {!disabled && open && box && matches.length > 0
         ? createPortal(
             <ul
               ref={menuRef}
@@ -536,10 +573,26 @@ function UnloadTruckCard({
     label: itemLabel(item),
   }));
 
+  const [openMenuDropId, setOpenMenuDropId] = useState<string | null>(null);
+  const menuContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!openMenuDropId) return;
+    function handlePointerDown(e: MouseEvent) {
+      if (menuContainerRef.current && !menuContainerRef.current.contains(e.target as Node)) {
+        setOpenMenuDropId(null);
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [openMenuDropId]);
+
   const addDrop = () => {
     onChange({
       ...truckUnload,
-      drops: [...truckUnload.drops, { id: generateId(), society_id: null, lines: [] }],
+      drops: [...truckUnload.drops, { id: generateId(), society_id: null, lines: [], submitted: false }],
     });
   };
 
@@ -579,12 +632,11 @@ function UnloadTruckCard({
   };
 
   const removeDrop = (dropId: string) => {
+    if (openMenuDropId === dropId) setOpenMenuDropId(null);
     onChange({ ...truckUnload, drops: truckUnload.drops.filter((drop) => drop.id !== dropId) });
   };
 
-  const canAddDrop =
-    itemOptions.length > 0 &&
-    (truckUnload.drops.length === 0 || dropIsComplete(truckUnload.drops[truckUnload.drops.length - 1]!));
+  const { canAddDrop, title: addDropTitle } = societyDropAddMeta(truck, truckUnload);
 
   return (
     <section className="relative overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm sm:rounded-2xl">
@@ -594,7 +646,7 @@ function UnloadTruckCard({
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 sm:h-8 sm:w-8">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
               <rect x="1" y="3" width="15" height="13" />
-              <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+              <polygon points="16 8 20 8 23 11 23 16 16 16 8" />
               <circle cx="5.5" cy="18.5" r="2.5" />
               <circle cx="18.5" cy="18.5" r="2.5" />
             </svg>
@@ -657,11 +709,7 @@ function UnloadTruckCard({
               type="button"
               onClick={addDrop}
               disabled={!canAddDrop}
-              title={
-                canAddDrop
-                  ? "Add another society drop"
-                  : "Complete the current drop (society, fish lines, quantities) to add another"
-              }
+              title={addDropTitle}
               className="rounded-full bg-rose-50 p-1 text-rose-500 transition-colors hover:bg-rose-100 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-rose-50 disabled:hover:text-rose-500"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
@@ -674,106 +722,226 @@ function UnloadTruckCard({
           {truckUnload.drops.length > 0 && (
             <div className="space-y-4">
               {truckUnload.drops.map((drop, dropIndex) => {
+                const isSubmitted = Boolean(drop.submitted);
+                const isComplete = dropIsComplete(drop);
+                const sDisplayText = societyDisplayText(drop, societies);
+                const isMenuOpen = openMenuDropId === drop.id;
                 const dropQtyTotal = drop.lines.reduce(
                   (sum, line) => sum + (line.quantity === "" ? 0 : Number(line.quantity) || 0),
                   0,
                 );
                 return (
-                <div
-                  key={drop.id}
-                  className="group relative space-y-4 rounded-xl border border-gray-100 bg-white p-3 shadow-sm transition-all duration-300 hover:shadow-md sm:p-4"
-                >
-                  {dropIndex > 0 ? (
-                    <div className="-mr-1 -mt-2 flex justify-end sm:absolute sm:-right-3 sm:-top-3 sm:mt-0 sm:mr-0 z-10">
-                      <button
-                        type="button"
-                        onClick={() => removeDrop(drop.id)}
-                        className="flex h-7 w-7 items-center justify-center rounded-full border border-gray-100 bg-white text-gray-400 shadow-sm transition-all hover:border-red-100 hover:bg-red-50 hover:text-red-500 sm:h-8 sm:w-8"
-                        aria-label="Remove drop"
-                      >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5 sm:h-4 sm:w-4">
-                          <line x1="18" y1="6" x2="6" y2="18" />
-                          <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                      </button>
-                    </div>
-                  ) : null}
-
-                  <div className="grid gap-4 sm:grid-cols-2 sm:gap-6">
-                    <label className="group/select block space-y-1 sm:space-y-1.5">
-                      <span className="label text-xs transition-colors group-focus-within/select:text-rose-600 sm:text-[0.8125rem]">
-                        Society
-                      </span>
-                      <div className="rounded-xl transition-all duration-300 group-focus-within/select:shadow-[0_0_0_3px_rgba(225,29,72,0.1)]">
-                        <SocietyField
-                          key={`society-${drop.id}`}
-                          societies={societies}
-                          drop={drop}
-                          onChange={(patch) => updateDrop(drop.id, patch)}
-                        />
+                  <div
+                    key={drop.id}
+                    className={`group relative space-y-4 rounded-xl border p-3 shadow-sm transition-all duration-300 sm:p-4 ${
+                      isSubmitted
+                        ? "border-emerald-200/80 bg-emerald-50/10 shadow-emerald-500/5"
+                        : "border-gray-100 bg-white hover:shadow-md"
+                    }`}
+                  >
+                    {/* Society Card Header: Title + Status + 3-dots Menu */}
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span
+                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-bold ${
+                            isSubmitted
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-gray-100 text-gray-700"
+                          }`}
+                        >
+                          {dropIndex + 1}
+                        </span>
+                        <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2">
+                          <span className="truncate text-sm font-bold text-gray-800">
+                            {sDisplayText || `Society #${dropIndex + 1}`}
+                          </span>
+                          {isSubmitted ? (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wider text-emerald-700">
+                              <svg
+                                className="h-3 w-3 text-emerald-600"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2.5"
+                              >
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                              </svg>
+                              Locked
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wider text-amber-700">
+                              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                              Editing
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </label>
 
-                    <label className="group/select block space-y-1 sm:space-y-1.5">
-                      <span className="label text-xs transition-colors group-focus-within/select:text-rose-600 sm:text-[0.8125rem]">
-                        Fish type &amp; size
-                      </span>
-                      <div className="rounded-xl transition-all duration-300 group-focus-within/select:shadow-[0_0_0_3px_rgba(225,29,72,0.1)]">
-                        <SelectField
-                          key={`lines-${drop.id}`}
-                          multiple
-                          showCountOnly
-                          valueMultiple={drop.lines.map((line) => line.itemKey)}
-                          onChangeMultiple={(values) => setDropLines(drop.id, values)}
-                          placeholder="Select fish lines…"
-                          options={itemOptions}
-                        />
-                      </div>
-                    </label>
-                  </div>
-
-                  {drop.lines.length > 0 ? (
-                    <div className="mt-2 space-y-3 rounded-xl border border-rose-100/50 bg-rose-50/30 p-3 sm:space-y-4 sm:p-4">
-                      <h4 className="flex items-center justify-between gap-3 text-[0.7rem] font-bold uppercase tracking-widest text-rose-700 sm:text-xs">
-                        <span className="flex min-w-0 items-center gap-1.5 sm:gap-2">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5">
-                            <line x1="4" x2="20" y1="9" y2="9" />
-                            <line x1="4" x2="20" y1="15" y2="15" />
-                            <line x1="10" x2="8" y1="3" y2="21" />
-                            <line x1="16" x2="14" y1="3" y2="21" />
+                      {/* 3-dots menu to edit or remove */}
+                      <div className="relative" ref={isMenuOpen ? menuContainerRef : undefined}>
+                        <button
+                          type="button"
+                          onClick={() => setOpenMenuDropId(isMenuOpen ? null : drop.id)}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900 focus:outline-none sm:h-8 sm:w-8"
+                          aria-label="Society options"
+                          title="Society options"
+                        >
+                          <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                            <circle cx="12" cy="5" r="1.75" />
+                            <circle cx="12" cy="12" r="1.75" />
+                            <circle cx="12" cy="19" r="1.75" />
                           </svg>
-                          Enter quantities
+                        </button>
+
+                        {isMenuOpen && (
+                          <div className="absolute right-0 top-9 z-30 min-w-[160px] rounded-xl border border-gray-100 bg-white p-1.5 shadow-lg shadow-black/10 animate-in fade-in zoom-in-95">
+                            {isSubmitted ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  updateDrop(drop.id, { submitted: false });
+                                  setOpenMenuDropId(null);
+                                }}
+                                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-rose-50 hover:text-rose-600 text-left"
+                              >
+                                <svg
+                                  className="h-3.5 w-3.5 text-gray-400 group-hover:text-rose-500"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                >
+                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                </svg>
+                                Edit Society
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={!isComplete}
+                                onClick={() => {
+                                  if (isComplete) {
+                                    updateDrop(drop.id, { submitted: true });
+                                    setOpenMenuDropId(null);
+                                  }
+                                }}
+                                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent text-left"
+                              >
+                                <svg
+                                  className="h-3.5 w-3.5 text-emerald-600"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2.5"
+                                >
+                                  <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                                Submit Society
+                              </button>
+                            )}
+
+                            {truckUnload.drops.length > 1 && (
+                              <>
+                                <div className="my-1 border-t border-gray-100" />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    removeDrop(drop.id);
+                                    setOpenMenuDropId(null);
+                                  }}
+                                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 text-left"
+                                >
+                                  <svg
+                                    className="h-3.5 w-3.5 text-red-500"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                  >
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                  </svg>
+                                  Remove Drop
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2 sm:gap-6">
+                      <label className="group/select block space-y-1 sm:space-y-1.5">
+                        <span className="label text-xs transition-colors group-focus-within/select:text-rose-600 sm:text-[0.8125rem]">
+                          Society
                         </span>
-                        <span className="shrink-0 normal-case tracking-normal text-rose-800/90">
-                          Total quantity{" "}
-                          <span className="tabular-nums font-extrabold">{dropQtyTotal.toLocaleString()}</span>
+                        <div className="rounded-xl transition-all duration-300 group-focus-within/select:shadow-[0_0_0_3px_rgba(225,29,72,0.1)]">
+                          <SocietyField
+                            key={`society-${drop.id}`}
+                            societies={societies}
+                            drop={drop}
+                            disabled={isSubmitted}
+                            onChange={(patch) => updateDrop(drop.id, patch)}
+                          />
+                        </div>
+                      </label>
+
+                      <label className="group/select block space-y-1 sm:space-y-1.5">
+                        <span className="label text-xs transition-colors group-focus-within/select:text-rose-600 sm:text-[0.8125rem]">
+                          Fish type &amp; size
                         </span>
-                      </h4>
-                      <div className="grid gap-2.5 sm:gap-3">
-                        {drop.lines.map((line) => {
-                          const display = lineDisplay(truck, line.itemKey);
-                          const transferQty = transferQtyForItemKey(truck, line.itemKey);
-                          const maxLineQty = maxQtyForUnloadLine(truck, truckUnload.drops, drop.id, line.itemKey);
-                          const allocatedOnOtherDrops = transferQty - maxLineQty;
-                          const atCap =
-                            line.quantity !== "" &&
-                            Number(line.quantity) > 0 &&
-                            Number(line.quantity) >= maxLineQty &&
-                            maxLineQty < transferQty;
-                          return (
-                            <div
-                              key={line.itemKey}
-                              className="grid grid-cols-[minmax(0,1fr)_8rem] items-center gap-x-3 gap-y-2 rounded-lg border border-rose-100 bg-white p-2.5 pl-2 shadow-sm sm:pl-2.5"
-                            >
-                              <div className="grid min-w-0 grid-cols-3 items-center">
-                                <span className="min-w-0 truncate text-sm font-semibold text-gray-700">
-                                  {display.fishType}
-                                </span>
-                                <span className="justify-self-center whitespace-nowrap rounded-md bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-600/70">
-                                  {display.seedSize ?? "—"}
-                                </span>
-                                <span className="min-w-0 justify-self-end text-right text-[0.65rem] font-semibold tabular-nums text-gray-400 sm:text-xs">
-                                  {allocatedOnOtherDrops > 0 ? (
+                        <div className="rounded-xl transition-all duration-300 group-focus-within/select:shadow-[0_0_0_3px_rgba(225,29,72,0.1)]">
+                          <SelectField
+                            key={`lines-${drop.id}`}
+                            multiple
+                            showCountOnly
+                            disabled={isSubmitted}
+                            valueMultiple={drop.lines.map((line) => line.itemKey)}
+                            onChangeMultiple={(values) => setDropLines(drop.id, values)}
+                            placeholder="Select fish lines…"
+                            options={itemOptions}
+                          />
+                        </div>
+                      </label>
+                    </div>
+
+                    {drop.lines.length > 0 ? (
+                      <div className="mt-2 space-y-3 rounded-xl border border-rose-100/50 bg-rose-50/30 p-3 sm:space-y-4 sm:p-4">
+                        <h4 className="flex items-center justify-between gap-3 text-[0.7rem] font-bold uppercase tracking-widest text-rose-700 sm:text-xs">
+                          <span className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5">
+                              <line x1="4" x2="20" y1="9" y2="9" />
+                              <line x1="4" x2="20" y1="15" y2="15" />
+                              <line x1="10" x2="8" y1="3" y2="21" />
+                              <line x1="16" x2="14" y1="3" y2="21" />
+                            </svg>
+                            Enter quantities
+                          </span>
+                          <span className="shrink-0 normal-case tracking-normal text-rose-800/90">
+                            Total quantity{" "}
+                            <span className="tabular-nums font-extrabold">{dropQtyTotal.toLocaleString()}</span>
+                          </span>
+                        </h4>
+                        <div className="grid gap-2.5 sm:gap-3">
+                          {drop.lines.map((line) => {
+                            const display = lineDisplay(truck, line.itemKey);
+                            const transferQty = transferQtyForItemKey(truck, line.itemKey);
+                            const maxLineQty = maxQtyForUnloadLine(truck, truckUnload.drops, drop.id, line.itemKey);
+                            const allocatedOnOtherDrops = transferQty - maxLineQty;
+                            const atCap =
+                              line.quantity !== "" &&
+                              Number(line.quantity) > 0 &&
+                              Number(line.quantity) >= maxLineQty &&
+                              maxLineQty < transferQty;
+                            return (
+                              <FishQuantityRow
+                                key={line.itemKey}
+                                fishType={display.fishType}
+                                seedSize={display.seedSize}
+                                meta={
+                                  allocatedOnOtherDrops > 0 ? (
                                     <>
                                       <span className="block">{maxLineQty.toLocaleString()} left</span>
                                       <span className="block font-normal text-gray-400/80">
@@ -782,13 +950,21 @@ function UnloadTruckCard({
                                     </>
                                   ) : (
                                     <>max {maxLineQty.toLocaleString()}</>
-                                  )}
-                                </span>
-                              </div>
-                              <QuantityInput
-                                required={maxLineQty > 0}
-                                disabled={maxLineQty === 0}
+                                  )
+                                }
                                 value={line.quantity}
+                                quantityRequired={maxLineQty > 0}
+                                quantityDisabled={isSubmitted || maxLineQty === 0}
+                                quantityTitle={
+                                  atCap
+                                    ? `Remaining for this fish line on this truck: ${maxLineQty.toLocaleString()} (transfer qty ${transferQty.toLocaleString()})`
+                                    : undefined
+                                }
+                                quantityClassName={`w-full rounded-md border bg-gray-50 px-3 py-1.5 text-sm text-right tabular-nums font-medium text-gray-900 transition-all focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 ${
+                                  atCap
+                                    ? "border-amber-300 focus:border-amber-400 focus:ring-amber-500/20"
+                                    : "border-gray-200 focus:border-rose-400 focus:ring-rose-500/20"
+                                }`}
                                 onChange={(raw) => {
                                   let next = raw;
                                   if (next !== "" && maxLineQty > 0 && next > maxLineQty) {
@@ -797,24 +973,67 @@ function UnloadTruckCard({
                                   updateDropLineQty(drop.id, line.itemKey, next);
                                 }}
                                 placeholder="Qty"
-                                title={
-                                  atCap
-                                    ? `Remaining for this fish line on this truck: ${maxLineQty.toLocaleString()} (transfer qty ${transferQty.toLocaleString()})`
-                                    : undefined
-                                }
-                                className={`w-full rounded-md border bg-gray-50 px-3 py-1.5 text-sm text-right tabular-nums font-medium text-gray-900 transition-all focus:outline-none focus:ring-2 ${
-                                  atCap
-                                    ? "border-amber-300 focus:border-amber-400 focus:ring-amber-500/20"
-                                    : "border-gray-200 focus:border-rose-400 focus:ring-rose-500/20"
-                                }`}
                               />
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  ) : null}
-                </div>
+                    ) : null}
+
+                    {/* Bottom Status & Action: Submit Society or Locked Notice */}
+                    {isSubmitted ? (
+                      <div className="flex items-center justify-between rounded-xl border border-emerald-200/80 bg-emerald-50/50 px-3.5 py-2.5 text-xs text-emerald-800">
+                        <div className="flex items-center gap-2">
+                          <svg
+                            className="h-4 w-4 shrink-0 text-emerald-600"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                          >
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                          </svg>
+                          <span className="font-semibold">Society details submitted &amp; locked to prevent mistypes.</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => updateDrop(drop.id, { submitted: false })}
+                          className="ml-2 inline-flex shrink-0 items-center gap-1 font-bold text-emerald-700 underline underline-offset-2 transition-colors hover:text-emerald-900"
+                        >
+                          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
+                          Edit
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2 border-t border-gray-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-xs text-gray-500">
+                          {!dropHasSociety(drop)
+                            ? "Select a society to begin."
+                            : drop.lines.length === 0
+                            ? "Select fish lines for this society."
+                            : !isComplete
+                            ? "Enter quantities (> 0) to submit."
+                            : "Submit to lock society details and prevent mistypes."}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => updateDrop(drop.id, { submitted: true })}
+                          disabled={!isComplete}
+                          title={isComplete ? "Lock society details" : "Select society and enter fish quantities first"}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-emerald-600 sm:w-auto"
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3.5 w-3.5">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                          Submit Society
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -827,16 +1046,15 @@ function UnloadTruckCard({
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className={FIELD_CELL}>
                 <span className={FIELD_LABEL}>Odometer reading</span>
-                <input
+                <NumericFieldInput
                   className={`${FIELD_INPUT} h-[38px] min-h-[38px] py-0`}
-                  type="number"
                   required
                   placeholder="Total KM"
                   value={truckUnload.odometer_reading}
-                  onChange={(e) =>
+                  onChange={(next) =>
                     onChange({
                       ...truckUnload,
-                      odometer_reading: e.target.value === "" ? "" : Number(e.target.value),
+                      odometer_reading: next,
                     })
                   }
                 />
@@ -929,10 +1147,32 @@ function UnloadTrucksCarousel({
 
   if (trucks.length === 0) return null;
 
+  const activeTruck = trucks[active];
+  const activeUnload =
+    activeTruck?.id != null
+      ? (draft.trucks[activeTruck.id] ?? { drops: [], odometer_reading: "", photoName: null })
+      : null;
+  const activeDropMeta =
+    activeTruck && activeUnload ? societyDropAddMeta(activeTruck, activeUnload) : { canAddDrop: false, title: "" };
+
+  const addDropForActiveTruck = () => {
+    if (!activeTruck?.id || !activeUnload) return;
+    onDraftChange({
+      ...draft,
+      trucks: {
+        ...draft.trucks,
+        [activeTruck.id]: {
+          ...activeUnload,
+          drops: [...activeUnload.drops, { id: generateId(), society_id: null, lines: [], submitted: false }],
+        },
+      },
+    });
+  };
+
   return (
     <div className="group/carousel relative space-y-4">
-      <div className="flex items-center justify-between px-2 sm:px-4">
-        <div className="w-8" aria-hidden />
+      <div className="flex items-center justify-center px-2 sm:px-4 md:justify-between">
+        <div className="hidden w-8 md:block" aria-hidden />
         
         <div className="flex items-center justify-center">
           {trucks.length > 1 && (
@@ -947,8 +1187,11 @@ function UnloadTrucksCarousel({
             </button>
           )}
           
-          <h3 className="text-sm font-bold uppercase tracking-widest text-gray-500 mx-4">
-            Final Point Trucks {trucks.length > 1 && <span className="text-gray-400 font-medium">({active + 1}/{trucks.length})</span>}
+          <h3 className="mx-2 shrink-0 whitespace-nowrap text-xs font-bold uppercase tracking-wide text-gray-500 sm:mx-4 sm:text-sm sm:tracking-widest">
+            Final Point Trucks
+            {trucks.length > 1 ? (
+              <span className="font-medium text-gray-400"> ({active + 1}/{trucks.length})</span>
+            ) : null}
           </h3>
 
           {trucks.length > 1 && (
@@ -963,7 +1206,7 @@ function UnloadTrucksCarousel({
             </button>
           )}
         </div>
-        <div className="w-8" />
+        <div className="hidden w-8 md:block" aria-hidden />
       </div>
 
       <div
@@ -992,6 +1235,13 @@ function UnloadTrucksCarousel({
           );
         })}
       </div>
+      <FloatingAddButton
+        variant="rose"
+        onClick={addDropForActiveTruck}
+        disabled={!activeDropMeta.canAddDrop}
+        title={activeDropMeta.title}
+        ariaLabel="Add another society drop"
+      />
     </div>
   );
 }
@@ -1014,7 +1264,6 @@ function UnloadJourneyForm({
   const router = useRouter();
   const [state, formAction, pending] = useActionState(recordUnload, null);
   const [clientError, setClientError] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
   const odometerFilesRef = useRef(new Map<string, File>());
   const societies = societiesForJourney(districts, journey);
 
@@ -1085,6 +1334,9 @@ function UnloadJourneyForm({
       if (!unload) return false;
       const progress = truckProgressPercent(truck, unload.drops);
       if (progress < 100) return false;
+      const allDropsSubmitted =
+        unload.drops.length > 0 && unload.drops.every((drop) => Boolean(drop.submitted));
+      if (!allDropsSubmitted) return false;
       return (
         unload.odometer_reading !== "" &&
         Boolean(unload.photoName || unload.existingOdometerImagePath)
@@ -1105,6 +1357,17 @@ function UnloadJourneyForm({
           if (!truck.id) continue;
           const unload = draft.trucks[truck.id];
           if (!unload) continue;
+
+          for (let i = 0; i < unload.drops.length; i++) {
+            const drop = unload.drops[i]!;
+            if (!drop.submitted) {
+              const name = societyDisplayText(drop, societies) || `Society #${i + 1}`;
+              const vehicle = truck.vehicle_number ? ` on truck ${truck.vehicle_number}` : "";
+              setClientError(`Please click "Submit Society" for "${name}"${vehicle} to lock it before closing the journey.`);
+              return;
+            }
+          }
+
           const qtyError = validateTruckUnloadQuantities(truck, unload.drops);
           if (qtyError) {
             setClientError(qtyError);
@@ -1126,13 +1389,9 @@ function UnloadJourneyForm({
         const formData = new FormData(form);
         formData.set("payload", JSON.stringify(payload));
         for (const [fieldName, file] of odometerFilesRef.current) {
-          if (!formDataFile(formData, fieldName)) {
-            formData.set(fieldName, file);
-          }
+          formData.set(fieldName, file);
         }
-        startTransition(() => {
-          formAction(formData);
-        });
+        void submitCompressedFormAction(formData, formAction);
       }}
     >
       <input type="hidden" name="journey_id" value={journey.journeyId} />
@@ -1165,12 +1424,11 @@ function UnloadJourneyForm({
         registerOdometerFile={registerOdometerFile}
       />
 
-      <div className="pt-4 sm:pt-6" />
-      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-100 bg-white/80 p-4 backdrop-blur-md sm:relative sm:border-t-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+      <div className="pt-4 sm:pt-6">
         <button
           type="submit"
           disabled={pending || !allTrucksComplete}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue px-6 py-4 text-base font-bold text-white shadow-lg transition-all hover:bg-blue-dark disabled:opacity-50 sm:rounded-full"
+          className="flex w-full items-center justify-center gap-2 rounded-full bg-blue px-6 py-4 text-base font-bold text-white shadow-lg transition-all hover:bg-blue-dark disabled:opacity-50"
         >
           {pending ? "Saving..." : "Close journey"}
         </button>
@@ -1193,6 +1451,9 @@ export function FinalPointForm({
   const [drafts, setDrafts] = useState<Record<string, UnloadDraft>>({});
   const [draftsHydrated, setDraftsHydrated] = useState(false);
   const [laneView, setLaneView] = useState<JourneyPointLaneView>("in_progress");
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [deleteUnloadJourneyId, setDeleteUnloadJourneyId] = useState<string | null>(null);
+  const [isDeletingUnload, setIsDeletingUnload] = useState(false);
 
   const { inProgress: inProgressJourneys, closed: closedJourneys } = splitJourneysByPointLane("final", journeys);
 
@@ -1222,11 +1483,8 @@ export function FinalPointForm({
   }, [drafts, draftsHydrated, journeys]);
 
   async function openUnload(journey: JourneySummary) {
-    const result = await startFinalUnload(journey.journeyId);
-    if (!result.success) {
-      window.alert(result.error ?? "Could not start unload.");
-      return;
-    }
+    const phase = normalizeJourneyPhase(journey.phase);
+    const alreadyOnFinalLeg = phase === JourneyPhase.Final || phase === JourneyPhase.Closed;
 
     setDrafts((prev) => {
       const stored = readStoredUnloadDrafts()[journey.id];
@@ -1237,7 +1495,18 @@ export function FinalPointForm({
     });
     setRecordingId(journey.id);
     setViewState("record");
-    router.refresh();
+    scrollCanvasToTop();
+
+    if (alreadyOnFinalLeg) return;
+
+    const result = await startFinalUnload(journey.journeyId);
+    if (!result.success) {
+      window.alert(result.error ?? "Could not start unload.");
+      setRecordingId(null);
+      setViewState("list");
+      return;
+    }
+    startTransition(() => router.refresh());
   }
 
   function closeUnload() {
@@ -1252,6 +1521,40 @@ export function FinalPointForm({
       delete next[journeyId];
       return next;
     });
+    const stored = readStoredUnloadDrafts();
+    if (journeyId in stored) {
+      delete stored[journeyId];
+      localStorage.setItem(UNLOAD_DRAFTS_STORAGE_KEY, JSON.stringify(stored));
+    }
+  }
+
+  function handleEditUnload(journey: JourneySummary) {
+    void openUnload(journey);
+    setOpenDropdownId(null);
+  }
+
+  async function confirmDeleteUnload() {
+    if (!deleteUnloadJourneyId) return;
+    const journey = journeys.find((j) => j.id === deleteUnloadJourneyId);
+    if (!journey) return;
+
+    setIsDeletingUnload(true);
+    clearDraft(journey.id);
+    const result = await deleteFinalUnloadRecording(journey.journeyId);
+    setIsDeletingUnload(false);
+    setDeleteUnloadJourneyId(null);
+    setOpenDropdownId(null);
+
+    if (!result.success) {
+      window.alert(result.error ?? "Could not delete final unload.");
+      return;
+    }
+
+    if (recordingId === journey.id) {
+      setRecordingId(null);
+      setViewState("list");
+    }
+    startTransition(() => router.refresh());
   }
 
   const recordingJourney = viewState === "record" ? journeys.find((j) => j.id === recordingId) : null;
@@ -1265,7 +1568,7 @@ export function FinalPointForm({
         : mergeUnloadDraft(recordingJourney, storedUnload));
 
     return (
-      <div className="mx-auto w-full max-w-4xl space-y-6 px-2 pb-20 sm:px-0 sm:pb-12 animate-in slide-in-from-bottom-4 fade-in duration-500">
+      <div className="mx-auto w-full max-w-4xl space-y-6 px-2 pb-20 sm:px-0 sm:pb-12">
         <div className="flex items-center gap-3 px-1 sm:gap-5">
           <button
             type="button"
@@ -1329,6 +1632,58 @@ export function FinalPointForm({
             {journeyPointBadgeLabel("final", journey.phase)}
           </span>
         }
+        optionsMenu={
+          normalizeJourneyPhase(journey.phase) !== JourneyPhase.Final &&
+          normalizeJourneyPhase(journey.phase) !== JourneyPhase.Closed ? undefined : (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setOpenDropdownId(openDropdownId === journey.id ? null : journey.id)}
+                className="rounded-full p-1.5 text-blue-600 transition-colors hover:bg-white/50"
+                title="Options"
+                aria-label="Journey options"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-5 w-5"
+                >
+                  <circle cx="12" cy="12" r="1" />
+                  <circle cx="12" cy="5" r="1" />
+                  <circle cx="12" cy="19" r="1" />
+                </svg>
+              </button>
+              {openDropdownId === journey.id ? (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setOpenDropdownId(null)} />
+                  <div className="absolute right-0 z-20 mt-1 w-36 overflow-hidden rounded-lg border border-gray-100 bg-white py-1 shadow-lg">
+                    <button
+                      type="button"
+                      onClick={() => handleEditUnload(journey)}
+                      className="w-full px-4 py-2 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-blue-50 hover:text-blue-600"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeleteUnloadJourneyId(journey.id);
+                        setOpenDropdownId(null);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          )
+        }
         footer={
           normalizeJourneyPhase(journey.phase) !== JourneyPhase.Transfer &&
           normalizeJourneyPhase(journey.phase) !== JourneyPhase.Final ? undefined : (
@@ -1383,6 +1738,36 @@ export function FinalPointForm({
           closedJourneys.map((journey) => renderFinalJourneyCard(journey, true))
         )}
       </JourneyPointLaneSection>
+
+      {deleteUnloadJourneyId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-gray-100 bg-white p-6 shadow-2xl">
+            <h3 className="mb-2 text-xl font-bold text-gray-900">Delete final unload?</h3>
+            <p className="mb-6 text-sm leading-relaxed text-gray-500">
+              This clears saved unload progress, society drops, and final odometer photos for this journey, then moves
+              it back to the transfer leg. Transfer data is kept.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteUnloadJourneyId(null)}
+                disabled={isDeletingUnload}
+                className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-200 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDeleteUnload()}
+                disabled={isDeletingUnload}
+                className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-red-600/20 transition-colors hover:bg-red-700 disabled:opacity-50"
+              >
+                {isDeletingUnload ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

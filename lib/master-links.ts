@@ -25,9 +25,9 @@ export const masterLinks = [
     description: "Fish type and seed size.",
   },
   {
-    slug: "expenses",
-    label: "Expenses",
-    description: "What an expense is towards.",
+    slug: "transactions",
+    label: "Transactions",
+    description: "Categories used to classify money in, out, and transfers.",
   },
 ] as const;
 

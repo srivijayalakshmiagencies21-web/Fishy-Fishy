@@ -6,24 +6,62 @@ import {
   addSociety,
   createAccount,
   createDistrict,
-  createExpense,
   createFish,
   createPaymentMode,
+  createTransactionCategory,
   createVendor,
   deleteAccount,
   deleteDistrict,
-  deleteExpense,
   deleteFish,
+  deleteTransactionCategory,
   deletePaymentMode,
   deleteSociety,
   deleteVendor,
   tagCompany,
   unlinkCompany,
+  updateTransactionCategory,
 } from "@/app/(workspace)/masters/actions";
 import { SelectField } from "@/components/select-field";
-import type { DistrictRow, FishRow, MasterData, NamedRow, VendorRow } from "@/lib/masters";
+import type {
+  DistrictRow,
+  FishRow,
+  MasterData,
+  NamedRow,
+  TransactionCategoryRow,
+  VendorRow,
+} from "@/lib/masters";
+import { mobileDigits, MOBILE_DIGITS } from "@/lib/phone";
 
 const inputClass = "input-field";
+
+const COST_NATURES = [
+  "Direct",
+  "Overhead",
+  "Revenue",
+  "Non-Cost",
+] as const;
+
+function transactionTypeLabel(value: TransactionCategoryRow["transaction_type"]) {
+  if (value === "in") return "Money In";
+  if (value === "out") return "Money Out";
+  return "Transfer";
+}
+
+function allocationLabel(value: TransactionCategoryRow["default_allocation"]) {
+  if (value === "company") return "Company";
+  if (value === "project") return "Journey";
+  return "Ask each time";
+}
+
+const DEFAULT_ALLOCATION_OPTIONS = [
+  { value: "company", label: "Company" },
+  { value: "ask", label: "Ask each time" },
+  { value: "project", label: "Journey" },
+] as const;
+
+function categoryMeta(row: TransactionCategoryRow) {
+  return `${transactionTypeLabel(row.transaction_type)} · ${row.cost_nature} · ${allocationLabel(row.default_allocation)}`;
+}
 
 export function MasterPanel({
   data,
@@ -56,16 +94,7 @@ export function MasterPanel({
           empty="No payments yet."
         />
       ) : null}
-      {data.kind === "expenses" ? (
-        <NamedMaster
-          fieldName="towards"
-          fieldLabel="Category"
-          action={createExpense}
-          deleteAction={deleteExpense}
-          rows={data.rows}
-          empty="No expenses yet."
-        />
-      ) : null}
+      {data.kind === "transactions" ? <TransactionCategoriesMaster rows={data.rows} /> : null}
       {data.kind === "vendors" ? <VendorMaster rows={data.rows} /> : null}
       {data.kind === "fishes" ? <FishMaster rows={data.rows} /> : null}
       {data.kind === "districts" ? <DistrictMaster rows={data.rows} /> : null}
@@ -78,6 +107,182 @@ function Notice({ message }: { message: string }) {
     <p className="rounded-xl border border-line bg-blue-soft px-4 py-3 text-sm font-medium text-blue-dark">
       {message}
     </p>
+  );
+}
+
+function TransactionCategoriesMaster({ rows }: { rows: TransactionCategoryRow[] }) {
+  const [state, formAction, pending] = useActionState(createTransactionCategory, null);
+  const [editRow, setEditRow] = useState<TransactionCategoryRow | null>(null);
+  return (
+    <>
+      <EntryCard>
+        <form action={formAction} className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))_auto] xl:items-end">
+            <label className="block min-w-0 space-y-1 md:col-span-2 xl:col-span-1">
+              <span className="label">Category name</span>
+              <input name="name" required className={inputClass} placeholder="e.g. Office rent" />
+            </label>
+            <label className="block min-w-0 space-y-1">
+              <span className="label">Transaction type</span>
+              <SelectField
+                name="transaction_type"
+                required
+                defaultValue="out"
+                options={[
+                  { value: "out", label: "Money Out" },
+                  { value: "in", label: "Money In" },
+                  { value: "both", label: "Transfer" },
+                ]}
+              />
+            </label>
+            <label className="block min-w-0 space-y-1">
+              <span className="label">Cost nature</span>
+              <SelectField
+                name="cost_nature"
+                required
+                defaultValue="Direct"
+                options={COST_NATURES.map((value) => ({ value, label: value }))}
+              />
+            </label>
+            <label className="block min-w-0 space-y-1">
+              <span className="label">Default allocation</span>
+              <SelectField
+                name="default_allocation"
+                required
+                defaultValue="ask"
+                options={[...DEFAULT_ALLOCATION_OPTIONS]}
+              />
+            </label>
+            <div className="md:col-span-2 xl:col-span-1 xl:justify-self-end">
+              <button type="submit" disabled={pending} className="btn-primary w-full md:w-auto">
+                {pending ? "Saving…" : "Add"}
+              </button>
+            </div>
+          </div>
+          {state?.error ? <p className="text-sm font-medium text-red-600">{state.error}</p> : null}
+        </form>
+      </EntryCard>
+
+      <RowsCard empty="No transaction categories yet." count={rows.length}>
+        <ul className="divide-y divide-line md:hidden">
+          {rows.map((row) => (
+            <li key={row.id} className="flex items-start justify-between gap-3 px-4 py-3">
+              <div className="min-w-0">
+                <p className="font-semibold break-words">{row.name}</p>
+                <p className="text-sm text-muted">{categoryMeta(row)}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button type="button" className="pill pill-blue" onClick={() => setEditRow(row)}>
+                  Edit
+                </button>
+                <DeleteButton action={deleteTransactionCategory} id={row.id} label={row.name} />
+              </div>
+            </li>
+          ))}
+        </ul>
+        <div className="hidden overflow-x-auto md:block">
+          <table className="w-full min-w-0 text-left text-sm">
+            <thead className="bg-blue-soft text-blue-dark">
+              <tr>
+                <th className="px-4 py-3 font-semibold">Category</th>
+                <th className="px-4 py-3 font-semibold">Setup</th>
+                <th className="px-4 py-3 text-right font-semibold"> </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.id} className="border-t border-line">
+                  <td className="px-4 py-3 font-medium">{row.name}</td>
+                  <td className="px-4 py-3 text-[var(--text-secondary)]">{categoryMeta(row)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button type="button" className="pill pill-blue" onClick={() => setEditRow(row)}>
+                        Edit
+                      </button>
+                      <DeleteButton action={deleteTransactionCategory} id={row.id} label={row.name} />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </RowsCard>
+
+      {editRow ? (
+        <TransactionCategoryModal row={editRow} onClose={() => setEditRow(null)} />
+      ) : null}
+    </>
+  );
+}
+
+function TransactionCategoryModal({
+  row,
+  onClose,
+}: {
+  row: TransactionCategoryRow;
+  onClose: () => void;
+}) {
+  const [state, formAction, pending] = useActionState(updateTransactionCategory, null);
+  const wasPendingRef = useRef(false);
+
+  useEffect(() => {
+    if (wasPendingRef.current && !pending && state === null) onClose();
+    wasPendingRef.current = pending;
+  }, [pending, state, onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-blue-dark/40 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-2xl border border-line bg-white shadow-xl">
+        <div className="border-b border-line px-5 py-4">
+          <h2 className="text-lg font-bold text-blue-dark">Edit transaction category</h2>
+        </div>
+        <form action={formAction} className="space-y-4 p-5">
+          <input type="hidden" name="id" value={row.id} />
+          <label className="block space-y-1">
+            <span className="label">Category name</span>
+            <input name="name" required defaultValue={row.name} className={inputClass} />
+          </label>
+          <label className="block space-y-1">
+            <span className="label">Transaction type</span>
+            <SelectField
+              name="transaction_type"
+              required
+              defaultValue={row.transaction_type}
+              options={[
+                { value: "out", label: "Money Out" },
+                { value: "in", label: "Money In" },
+                { value: "both", label: "Transfer" },
+              ]}
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="label">Cost nature</span>
+            <SelectField
+              name="cost_nature"
+              required
+              defaultValue={row.cost_nature}
+              options={COST_NATURES.map((value) => ({ value, label: value }))}
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="label">Default allocation</span>
+            <SelectField
+              name="default_allocation"
+              required
+              defaultValue={row.default_allocation}
+              options={[...DEFAULT_ALLOCATION_OPTIONS]}
+            />
+          </label>
+          <FormFooter error={state?.error} pending={pending} label="Save" />
+        </form>
+        <div className="border-t border-line bg-page px-5 py-3 text-right">
+          <button type="button" onClick={onClose} className="btn-quiet">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -133,22 +338,35 @@ function VendorMaster({ rows }: { rows: VendorRow[] }) {
   return (
     <>
       <EntryCard>
-        <form action={action} className="flex flex-wrap items-center gap-4">
+        <form action={action} className="flex flex-wrap items-end gap-4">
           <Field label="Vendor name" name="name" />
-          <Field label="Contact number" name="contact_number" type="tel" />
-          <label className="flex flex-1 items-center gap-3 min-w-[200px]">
-            <span className="label !mb-0 shrink-0">Vendor type</span>
-            <div className="flex-1">
-              <SelectField
-                name="vendor_type"
-                required
-                defaultValue="Supplier"
-                options={[
-                  { value: "Supplier", label: "Supplier" },
-                  { value: "Transporter", label: "Transporter" },
-                ]}
-              />
-            </div>
+          <label className="block min-w-[200px] flex-1 space-y-1">
+            <span className="label">Contact number</span>
+            <input
+              name="contact_number"
+              type="tel"
+              inputMode="numeric"
+              maxLength={MOBILE_DIGITS}
+              pattern="\d{10}"
+              title="Enter a 10-digit mobile number"
+              required
+              onChange={(e) => {
+                e.currentTarget.value = mobileDigits(e.currentTarget.value);
+              }}
+              className={inputClass}
+            />
+          </label>
+          <label className="block min-w-[200px] flex-1 space-y-1">
+            <span className="label">Vendor type</span>
+            <SelectField
+              name="vendor_type"
+              required
+              defaultValue="Supplier"
+              options={[
+                { value: "Supplier", label: "Supplier" },
+                { value: "Transporter", label: "Transporter" },
+              ]}
+            />
           </label>
           <FormFooter error={state?.error} pending={pending} />
         </form>
@@ -201,7 +419,7 @@ function FishMaster({ rows }: { rows: FishRow[] }) {
   return (
     <>
       <EntryCard>
-        <form action={action} className="flex flex-wrap items-center gap-4">
+        <form action={action} className="flex flex-wrap items-end gap-4">
           <Field label="Fish type" name="fish_type" />
           <Field label="Seed size" name="seed_size" />
           <FormFooter error={state?.error} pending={pending} />
@@ -257,7 +475,7 @@ function DistrictMaster({ rows }: { rows: DistrictRow[] }) {
   return (
     <>
       <EntryCard>
-        <form ref={formRef} action={action} className="flex flex-wrap items-center gap-4">
+        <form ref={formRef} action={action} className="flex flex-wrap items-end gap-4">
           <Field label="District name" name="name" />
           <FormFooter error={state?.error} pending={pending} />
         </form>
@@ -443,7 +661,7 @@ function SingleFieldForm({
   const [state, formAction, pending] = useActionState(action, null);
 
   return (
-    <form action={formAction} className="flex flex-wrap items-center gap-4">
+    <form action={formAction} className="flex flex-wrap items-end gap-4">
       <Field label={label} name={name} />
       <FormFooter error={state?.error} pending={pending} />
     </form>
@@ -462,18 +680,18 @@ function Field({
   required?: boolean;
 }) {
   return (
-    <label className="flex flex-1 items-center gap-3 min-w-[200px]">
-      <span className="label !mb-0 shrink-0">{label}</span>
-      <input name={name} type={type} required={required} className={`${inputClass} flex-1`} />
+    <label className="block min-w-[200px] flex-1 space-y-1">
+      <span className="label">{label}</span>
+      <input name={name} type={type} required={required} className={inputClass} />
     </label>
   );
 }
 
-function FormFooter({ error, pending }: { error?: string; pending: boolean }) {
+function FormFooter({ error, pending, label = "Add" }: { error?: string; pending: boolean; label?: string }) {
   return (
     <>
       <button type="submit" disabled={pending} className="btn-primary shrink-0">
-        {pending ? "Saving…" : "Add"}
+        {pending ? "Saving…" : label}
       </button>
       {error ? <p className="w-full text-sm font-medium text-red-600">{error}</p> : null}
     </>

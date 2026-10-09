@@ -289,13 +289,13 @@ export function UserManagement({
               <p className="px-4 py-8 text-sm text-[var(--text-secondary)]">No users yet.</p>
             ) : (
               <div className="w-full overflow-x-auto">
-                <table className="data-table min-w-[640px]">
+                <table className="data-table min-w-[42rem]">
                 <thead>
                   <tr>
                     <th>User</th>
                     <th className="col-role">Role</th>
                     <th className="col-joined">Joined</th>
-                    <th className="col-login">Last logged in</th>
+                    <th className="col-login">Last login</th>
                     <th className="col-action" />
                   </tr>
                 </thead>
@@ -317,7 +317,7 @@ export function UserManagement({
                         )}
                       </td>
                       <td className="text-[var(--text-secondary)]" suppressHydrationWarning>{new Date(user.created_at).toLocaleDateString()}</td>
-                      <td className="text-[var(--text-secondary)]" suppressHydrationWarning>{formatLoggedIn(user.last_sign_in_at)}</td>
+                      <td className="col-login text-[var(--text-secondary)]" suppressHydrationWarning>{formatLoggedIn(user.last_sign_in_at)}</td>
                       <td className="col-action">
                         {resetUserId === user.user_id ? (
                           <form onSubmit={(event) => resetPassword(event, user.user_id)} className="flex items-center gap-2">
@@ -499,13 +499,10 @@ function displayName(email: string | null) {
 
 function formatLoggedIn(value: string | null) {
   if (!value) return "Never";
-  return new Date(value).toLocaleString(undefined, {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const date = new Date(value);
+  const day = date.toLocaleString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+  const time = date.toLocaleString(undefined, { hour: "numeric", minute: "2-digit" });
+  return `${day}, ${time}`;
 }
 
 async function functionError(error: unknown) {

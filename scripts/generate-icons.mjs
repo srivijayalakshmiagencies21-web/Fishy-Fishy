@@ -139,6 +139,7 @@ async function main() {
   // Also create a crisp 48x48 favicon.ico replacement
   const favicon32 = await sharp(icon512Buffer).resize(48, 48, { kernel: "lanczos3" }).png().toBuffer();
   fs.writeFileSync("public/favicon.ico", favicon32);
+  fs.writeFileSync("app/favicon.ico", favicon32);
   
   // Create SVG icons with high-res crisp transparent fish embedded on the #0f4c81 background
   const fishBase64 = standardFish.buffer.toString("base64");
@@ -149,8 +150,8 @@ async function main() {
   <image href="data:image/png;base64,${fishBase64}" x="${svgLeft}" y="${svgTop}" width="${standardFish.width}" height="${standardFish.height}"/>
 </svg>
 `;
-  fs.writeFileSync("app/icon.svg", svgContent);
   fs.writeFileSync("public/favicon.svg", svgContent);
+  fs.writeFileSync("public/icon.svg", svgContent);
   
   console.log("All brand icons generated with razor-sharp quality!");
 }

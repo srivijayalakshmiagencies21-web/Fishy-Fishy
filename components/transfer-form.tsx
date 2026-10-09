@@ -7,7 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
-  useTransition,
+  startTransition,
   type ReactNode,
   type UIEvent,
 } from "react";
@@ -17,6 +17,7 @@ import {
   recordTransfer,
 } from "@/app/(workspace)/transfer/actions";
 import { compressOdometerPhotoClient } from "@/lib/odometer-image-compress.client";
+import { submitCompressedFormAction } from "@/lib/submit-compressed-form-action";
 import { formDataFile } from "@/lib/odometer-image";
 import { formatOdometerDisplayLabel } from "@/lib/odometer-display";
 import { JourneySummaryCard } from "@/components/journey-summary-card";
@@ -42,8 +43,12 @@ import {
   laneViewShowsInProgress,
   type JourneyPointLaneView,
 } from "@/components/journey-point-lane-toggle";
-import { QuantityInput } from "@/components/quantity-input";
+import { FishQuantityRow } from "@/components/fish-quantity-row";
+import { NumericFieldInput, QuantityInput } from "@/components/quantity-input";
 import { SelectField } from "@/components/select-field";
+import { isValidMobile, mobileDigits, MOBILE_DIGITS } from "@/lib/phone";
+import { scrollCanvasToTop } from "@/lib/scroll-canvas";
+import { FloatingAddButton } from "@/components/floating-add-button";
 import {
   truckEndTypeBadgeClass,
   truckEndTypeLabel,
@@ -268,6 +273,45 @@ function FormSectionHeader({ title, icon }: { title: string; icon: ReactNode }) 
   );
 }
 
+function FormErrorModal({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onDismiss();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onDismiss]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="transfer-form-error-title"
+      onClick={onDismiss}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl border border-red-100 bg-white p-6 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h3 id="transfer-form-error-title" className="mb-2 text-lg font-bold text-gray-900">
+          Could not save transfer
+        </h3>
+        <p className="mb-6 text-sm leading-relaxed text-red-700">{message}</p>
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="rounded-xl bg-red-600 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function defaultSecondary(primaryTruckId: string, lines: PrimaryLine[]): SecondaryTruck {
   return {
     id: generateId(),
@@ -313,7 +357,7 @@ function isSecondaryTransferSlideComplete(secondary: SecondaryTruck, lines: Prim
   if (!secondary.transporter_id) return false;
   if (!secondary.vehicle_number.trim()) return false;
   if (!secondary.driver_name.trim()) return false;
-  if (!secondary.driver_phone.trim()) return false;
+  if (!isValidMobile(secondary.driver_phone)) return false;
   if (secondary.odometer_reading === "") return false;
   if (!secondary.photoName && !secondary.existingOdometerImagePath) return false;
   return true;
@@ -386,28 +430,10 @@ function transferInProgress(journey: Journey, draft?: TransferDraft): boolean {
   return Object.values(draft.remainders).some((value) => value !== "" && value !== 0);
 }
 
-/** Clear quantity fields until transfer is saved — never carry start-point totals into the form. */
-function clearUnsavedTransferQuantities(draft: TransferDraft, primaryLines: PrimaryLine[]): TransferDraft {
-  const remainders = { ...draft.remainders };
-  for (const key of Object.keys(remainders)) remainders[key] = "";
-
-  const secondariesByPrimary = { ...draft.secondariesByPrimary };
-  for (const [primaryId, secondaries] of Object.entries(secondariesByPrimary)) {
-    const lines = linesForPrimary(primaryLines, primaryId);
-    secondariesByPrimary[primaryId] = (secondaries ?? []).map((truck) => ({
-      ...truck,
-      allocations: emptyAllocations(lines),
-    }));
-  }
-
-  return { ...draft, remainders, secondariesByPrimary };
-}
-
 function mergeTransferDraft(journey: Journey, primaryLines: PrimaryLine[], saved?: TransferDraft | null): TransferDraft {
   const base = createDraft(journey, primaryLines);
   if (!saved) return base;
 
-  const persisted = hasPersistedTransferRecording(journey);
   const truckIds = new Set((journey.trucks ?? []).map((truck) => truck.id).filter(Boolean));
 
   const arrivals = { ...base.arrivals };
@@ -422,10 +448,8 @@ function mergeTransferDraft(journey: Journey, primaryLines: PrimaryLine[], saved
   }
 
   const remainders = { ...base.remainders };
-  if (persisted) {
-    for (const [key, value] of Object.entries(saved.remainders ?? {})) {
-      if (key in base.remainders) remainders[key] = value;
-    }
+  for (const [key, value] of Object.entries(saved.remainders ?? {})) {
+    if (key in base.remainders) remainders[key] = value;
   }
 
   const secondariesByPrimary = { ...base.secondariesByPrimary };
@@ -435,9 +459,7 @@ function mergeTransferDraft(journey: Journey, primaryLines: PrimaryLine[], saved
     secondariesByPrimary[primaryId] = (secondaries ?? []).map((truck) => ({
       ...truck,
       primary_truck_id: primaryId,
-      allocations: persisted
-        ? { ...emptyAllocations(lines), ...truck.allocations }
-        : emptyAllocations(lines),
+      allocations: { ...emptyAllocations(lines), ...(truck.allocations ?? {}) },
     }));
   }
 
@@ -552,49 +574,6 @@ function FishQuantitiesPanel({
         </span>
       </h4>
       <div className="grid gap-2.5 sm:gap-3">{children}</div>
-    </div>
-  );
-}
-
-function FishQuantityRow({
-  fishType,
-  seedSize,
-  value,
-  onChange,
-  placeholder = "Qty",
-  readOnly = false,
-}: {
-  fishType: string;
-  seedSize?: string | null;
-  value: number | "";
-  onChange?: (value: number | "") => void;
-  placeholder?: string;
-  readOnly?: boolean;
-}) {
-  const display = value === "" ? "—" : Number(value).toLocaleString();
-  return (
-    <div
-      className={`grid grid-cols-[minmax(0,1fr)_8rem] items-center gap-x-3 gap-y-2 rounded-lg border p-2.5 pl-2 shadow-sm sm:pl-2.5 ${
-        readOnly ? "border-gray-200 bg-gray-50/90" : "border-rose-100 bg-white"
-      }`}
-    >
-      <div className="grid min-w-0 grid-cols-3 items-center">
-        <span className="min-w-0 truncate text-sm font-semibold text-gray-700">{fishType}</span>
-        <span className="justify-self-center whitespace-nowrap rounded-md bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-600/70">
-          {seedSize ?? "—"}
-        </span>
-        <span aria-hidden className="min-w-0" />
-      </div>
-      {readOnly ? (
-        <span className="text-right text-sm font-medium tabular-nums text-gray-400">{display}</span>
-      ) : (
-        <QuantityInput
-          className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-right tabular-nums font-medium text-gray-900 transition-all focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
-          value={value}
-          onChange={(next) => onChange?.(next)}
-          placeholder={placeholder}
-        />
-      )}
     </div>
   );
 }
@@ -716,27 +695,23 @@ function SecondaryTruckPanel({
                           <input
                             className={`${FIELD_INPUT} h-[38px] min-h-[38px] py-0`}
                             type="tel"
+                            inputMode="numeric"
+                            maxLength={MOBILE_DIGITS}
+                            pattern="\d{10}"
+                            title="Enter a 10-digit mobile number"
                             required={secondaryLoaded}
                             value={secondary.driver_phone}
-                            onChange={(e) =>
-                              onUpdateSecondary({ driver_phone: e.target.value.replace(/\D/g, "") })
-                            }
+                            onChange={(e) => onUpdateSecondary({ driver_phone: mobileDigits(e.target.value) })}
                             placeholder="10-digit number"
                           />
                         </div>
                         <div className={FIELD_CELL}>
                           <span className={FIELD_LABEL}>Odometer reading</span>
-                          <input
+                          <NumericFieldInput
                             className={`${FIELD_INPUT} h-[38px] min-h-[38px] py-0`}
-                            type="number"
                             required={secondaryLoaded}
                             value={secondary.odometer_reading}
-                            onChange={(e) => {
-                              const raw = e.target.value;
-                              onUpdateSecondary({
-                                odometer_reading: raw === "" ? "" : Number(raw),
-                              });
-                            }}
+                            onChange={(next) => onUpdateSecondary({ odometer_reading: next })}
                             placeholder="Total KM"
                           />
                         </div>
@@ -760,7 +735,7 @@ function SecondaryTruckPanel({
                       <GovernmentDetailsSection lines={lines}>
                         {(group) => (
                           <FishQuantitiesPanel
-                            title="Quantities loaded"
+                            title="Enter quantities"
                             totalQuantity={group.lines.reduce((sum, line) => {
                               const qty = secondary.allocations[line.key];
                               return sum + (qty === "" ? 0 : Number(qty) || 0);
@@ -907,23 +882,23 @@ function TransferPrimaryStack({
   return (
     <div className="relative group/carousel space-y-4">
       {primarySelect && primarySelect.options.length > 1 ? (
-        <label className="flex items-center gap-3 px-2 sm:px-4">
-          <span className="shrink-0 text-xs font-bold uppercase tracking-widest text-gray-500">Primary truck</span>
-          <div className="min-w-0 max-w-[14rem] flex-1">
-            <SelectField
-              key={`${truck.id}:primary-select`}
-              compact
-              placeholder="Select primary truck"
-              defaultValue={truck.id}
-              options={primarySelect.options}
-              onChange={primarySelect.onChange}
-            />
-          </div>
+        <label className="flex w-full min-h-[2.375rem] items-center gap-2 rounded-full border border-purple-200 bg-purple-50 px-4 py-1 shadow-sm transition-[border-color,box-shadow] focus-within:border-purple-400 focus-within:ring-2 focus-within:ring-purple-500/15 max-md:sticky max-md:top-0 max-md:z-20">
+          <span className="shrink-0 text-sm font-medium text-purple-800">Select division</span>
+          <span className="mx-1 h-3.5 w-px shrink-0 bg-purple-200/80" aria-hidden />
+          <SelectField
+            key={`${truck.id}:primary-select`}
+            compact
+            integrated
+            placeholder="Division"
+            defaultValue={truck.id}
+            options={primarySelect.options}
+            onChange={primarySelect.onChange}
+          />
         </label>
       ) : null}
 
-      <div className="flex items-center justify-between px-2 sm:px-4">
-        <div className="w-8" aria-hidden />
+      <div className="flex items-center justify-center px-2 sm:px-4 md:justify-between">
+        <div className="hidden w-8 md:block" aria-hidden />
         
         <div className="flex items-center justify-center">
           {slideCount > 1 && (
@@ -938,8 +913,11 @@ function TransferPrimaryStack({
             </button>
           )}
           
-          <h3 className="text-sm font-bold uppercase tracking-widest text-gray-500 mx-4">
-            Transfer Point Trucks {slideCount > 1 && <span className="text-gray-400 font-medium">({activeSlide + 1}/{slideCount})</span>}
+          <h3 className="mx-2 shrink-0 whitespace-nowrap text-xs font-bold uppercase tracking-wide text-gray-500 sm:mx-4 sm:text-sm sm:tracking-widest">
+            Transfer Point Trucks
+            {slideCount > 1 ? (
+              <span className="font-medium text-gray-400"> ({activeSlide + 1}/{slideCount})</span>
+            ) : null}
           </h3>
 
           {slideCount > 1 && (
@@ -955,7 +933,7 @@ function TransferPrimaryStack({
           )}
         </div>
 
-        <div className="flex w-8 justify-end">
+        <div className="hidden w-8 justify-end md:flex">
           <button
             type="button"
             onClick={onAddSecondary}
@@ -978,7 +956,7 @@ function TransferPrimaryStack({
         className="flex w-full gap-4 overflow-x-auto snap-x snap-mandatory hide-scrollbar pb-4"
       >
         <div key={`primary-${truck.id}`} className="w-full min-w-full flex-[0_0_100%] snap-center">
-          <section className="relative overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm transition-all duration-500 animate-in slide-in-from-bottom-8 fade-in sm:rounded-2xl">
+          <section className="relative overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm sm:rounded-2xl">
             <div className="relative flex items-center gap-2 border-b border-gray-100 bg-gradient-to-r from-gray-50/80 to-white px-4 py-3 sm:gap-3 sm:px-5">
               <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-500 to-blue-300" />
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 sm:ml-2 sm:h-8 sm:w-8">
@@ -1070,6 +1048,12 @@ function TransferPrimaryStack({
           </div>
         ))}
       </div>
+      <FloatingAddButton
+        onClick={onAddSecondary}
+        disabled={!canAddSecondary}
+        title={canAddSecondary ? "Add secondary truck" : addBlockedReason ?? "Cannot add secondary truck"}
+        ariaLabel="Add secondary truck"
+      />
     </div>
   );
 }
@@ -1124,15 +1108,12 @@ function PrimaryTruckDetails({
         <ReadOnlyField label="Driver mobile" value={truck.driver_phone ?? ""} />
         <div className={FIELD_CELL}>
           <span className={FIELD_LABEL}>Odometer reading</span>
-          <input
+          <NumericFieldInput
             className={`${FIELD_INPUT} h-[38px] min-h-[38px] py-0`}
-            type="number"
             required
             placeholder="Total KM"
             value={arrival.odometer_reading}
-            onChange={(e) =>
-              onArrivalChange("odometer_reading", e.target.value === "" ? "" : Number(e.target.value))
-            }
+            onChange={(next) => onArrivalChange("odometer_reading", next)}
           />
         </div>
         <CameraCapture
@@ -1272,7 +1253,6 @@ function TransferJourneyForm({
 }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(recordTransfer, null);
-  const [, startTransition] = useTransition();
   const odometerFilesRef = useRef(new Map<string, File>());
   const allPrimaries = startPrimaryEntries(journey);
   const [activePrimary, setActivePrimary] = useState(0);
@@ -1347,7 +1327,11 @@ function TransferJourneyForm({
     [allPrimaries, draft, primaryLines],
   );
 
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (state?.error) setErrorMessage(state.error);
+  }, [state?.error]);
 
   const validateBeforeSubmit = (form: HTMLFormElement): string | null => {
     if (!draft.transfer_location_name.trim()) {
@@ -1386,8 +1370,8 @@ function TransferJourneyForm({
         if (!secondary.driver_name.trim()) {
           return `Enter the driver name for the ${secondaryLabel}.`;
         }
-        if (!secondary.driver_phone.trim()) {
-          return `Enter the driver mobile for the ${secondaryLabel}.`;
+        if (!isValidMobile(secondary.driver_phone)) {
+          return `Enter a 10-digit driver mobile for the ${secondaryLabel}.`;
         }
         if (secondary.odometer_reading === "") {
           return `Enter the odometer reading for the ${secondaryLabel}.`;
@@ -1404,8 +1388,8 @@ function TransferJourneyForm({
   useEffect(() => {
     if (state?.success) {
       onSubmitSuccess();
-      router.refresh();
       onCancel();
+      startTransition(() => router.refresh());
     }
   }, [state, onCancel, onSubmitSuccess, router]);
 
@@ -1476,40 +1460,31 @@ function TransferJourneyForm({
       className="space-y-5"
       onSubmit={(event) => {
         event.preventDefault();
-        setSubmitError(null);
+        setErrorMessage(null);
 
         const form = event.currentTarget;
         const validationError = validateBeforeSubmit(form);
         if (validationError) {
-          setSubmitError(validationError);
+          setErrorMessage(validationError);
           return;
         }
 
         if (!form.reportValidity()) {
-          setSubmitError("Fill in all required transporter and truck details before submitting.");
+          setErrorMessage("Fill in all required transporter and truck details before submitting.");
           return;
         }
 
         const formData = new FormData(form);
         formData.set("payload", JSON.stringify(payload));
         for (const [fieldName, file] of odometerFilesRef.current) {
-          if (!formDataFile(formData, fieldName)) {
-            formData.set(fieldName, file);
-          }
+          formData.set(fieldName, file);
         }
-        startTransition(() => {
-          formAction(formData);
-        });
+        void submitCompressedFormAction(formData, formAction);
       }}
     >
       <input type="hidden" name="journey_id" value={journey.journeyId} />
 
-      {submitError ? (
-        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{submitError}</p>
-      ) : null}
-      {state?.error ? (
-        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{state.error}</p>
-      ) : null}
+      {errorMessage ? <FormErrorModal message={errorMessage} onDismiss={() => setErrorMessage(null)} /> : null}
 
       <section className="relative overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm sm:rounded-2xl">
         <div className="relative flex items-center border-b border-gray-100 bg-gradient-to-r from-gray-50/80 to-white px-4 py-3 sm:px-5">
@@ -1557,7 +1532,7 @@ function TransferJourneyForm({
                   ? {
                       options: allPrimaries.map(({ truck, primaryNumber }) => ({
                         value: truck.id,
-                        label: `Primary Truck ${primaryNumber}`,
+                        label: `Division ${primaryNumber}`,
                       })),
                       onChange: (truckId) => {
                         const index = allPrimaries.findIndex(({ truck }) => truck.id === truckId);
@@ -1589,12 +1564,11 @@ function TransferJourneyForm({
         </div>
       )}
 
-      <div className="pt-4 sm:pt-6" />
-      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-100 bg-white/80 p-4 backdrop-blur-md sm:relative sm:border-t-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+      <div className="pt-4 sm:pt-6">
         <button
           type="submit"
           disabled={pending}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue px-6 py-4 text-base font-bold text-white shadow-lg transition-all hover:bg-blue-dark disabled:opacity-50 sm:rounded-full"
+          className="flex w-full items-center justify-center gap-2 rounded-full bg-blue px-6 py-4 text-base font-bold text-white shadow-lg transition-all hover:bg-blue-dark disabled:opacity-50"
         >
           {pending ? "Saving..." : "Submit Transfer"}
         </button>
@@ -1650,13 +1624,10 @@ export function TransferPointForm({
           continue;
         }
         if (next[journey.id]) {
-          const merged = {
-            ...next[journey.id],
+          next[journey.id] = {
+            ...mergeTransferDraft(journey, primaryLines, next[journey.id]),
             inventoryLines: primaryLines.length > 0 ? primaryLines : next[journey.id].inventoryLines,
           };
-          next[journey.id] = hasPersistedTransferRecording(journey)
-            ? merged
-            : clearUnsavedTransferQuantities(merged, primaryLines);
           continue;
         }
         next[journey.id] = mergeTransferDraft(journey, primaryLines, storedDraft);
@@ -1681,13 +1652,7 @@ export function TransferPointForm({
     localStorage.setItem(TRANSFER_DRAFTS_STORAGE_KEY, JSON.stringify(toStore));
   }, [drafts, draftsHydrated, activeJourneys]);
 
-  async function openRecording(journey: Journey) {
-    if (normalizeJourneyPhase(journey.phase) === JourneyPhase.Start) {
-      const result = await startTransfer(journey.journeyId);
-      if (!result.success) return;
-      router.refresh();
-    }
-
+  function openRecording(journey: Journey) {
     const stored = readStoredTransferDrafts()[journey.id];
     const fresh = buildPrimaryLines(journey);
     const primaryLines = resolvePrimaryLineInventory(
@@ -1696,10 +1661,7 @@ export function TransferPointForm({
     );
     setLinesByJourney((prev) => ({ ...prev, [journey.id]: primaryLines }));
     setDrafts((prev) => {
-      let base = prev[journey.id] ?? mergeTransferDraft(journey, primaryLines, stored);
-      if (!hasPersistedTransferRecording(journey)) {
-        base = clearUnsavedTransferQuantities(base, primaryLines);
-      }
+      const base = mergeTransferDraft(journey, primaryLines, prev[journey.id] ?? stored);
       return {
         ...prev,
         [journey.id]: {
@@ -1711,6 +1673,14 @@ export function TransferPointForm({
     });
     setRecordingId(journey.id);
     setViewState("record");
+    scrollCanvasToTop();
+
+    if (normalizeJourneyPhase(journey.phase) === JourneyPhase.Start) {
+      void startTransfer(journey.journeyId).then((result) => {
+        if (!result.success) return;
+        startTransition(() => router.refresh());
+      });
+    }
   }
 
   function clearDraftForJourney(journeyId: string) {
@@ -1766,7 +1736,7 @@ export function TransferPointForm({
       mergeTransferDraft(recordingJourney, primaryLines, stored);
 
     return (
-      <div className="mx-auto w-full max-w-4xl space-y-6 px-2 pb-20 sm:px-0 sm:pb-12 animate-in slide-in-from-bottom-4 fade-in duration-500">
+      <div className="mx-auto w-full max-w-4xl space-y-6 px-2 pb-20 sm:px-0 sm:pb-12">
         <div className="flex flex-col gap-4 px-1 sm:flex-row sm:items-center">
           <div className="flex items-center gap-3 sm:gap-5">
             <button

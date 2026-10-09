@@ -323,8 +323,11 @@ function LedgerStageQuantityCard({
                       key={idx}
                       className={`flex items-center justify-between rounded-lg border ${theme.rowBorder} ${theme.rowBg} px-2.5 py-1 text-xs shadow-2xs sm:px-3 sm:py-1.5`}
                     >
-                      <span className="font-bold text-slate-900">
-                        {line.fish} {line.seedSize ? `(${line.seedSize})` : ""}
+                      <span className="min-w-0 truncate font-bold text-slate-900">
+                        {line.fish}
+                        {line.seedSize ? (
+                          <span className="ml-1 font-semibold text-slate-500">({line.seedSize})</span>
+                        ) : null}
                       </span>
                       <span className={`font-mono font-extrabold tabular-nums ${theme.qtyText}`}>
                         {line.quantity.toLocaleString()}

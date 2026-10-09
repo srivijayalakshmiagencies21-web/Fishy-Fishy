@@ -161,29 +161,29 @@ export async function recordUnload(state: unknown, formData: FormData) {
     if (qtyError) return { success: false, error: qtyError };
   }
 
-  for (const truck of payload.trucks) {
-    let odometer_image_path: string | null = null;
-    const odometer_image = formDataFile(formData, `unload_image_${truck.truck_id}`);
-    if (odometer_image) {
-      try {
-        const { data: truckRow } = await supabase
-          .from("journey_trucks")
-          .select("vehicle_number, primary_truck_id")
-          .eq("id", truck.truck_id)
-          .maybeSingle();
+  const { data: allTruckRows } = await supabase
+    .from("journey_trucks")
+    .select("id, vehicle_number, primary_truck_id, created_at, odometer_image_path")
+    .eq("journey_id", journeyId)
+    .order("created_at", { ascending: true });
+  const truckRowMap = new Map<string, any>(
+    ((allTruckRows as any[]) ?? []).map((r: any) => [r.id as string, r]),
+  );
 
+  const uploadedUnloadPaths = await Promise.all(
+    payload.trucks.map(async (truck) => {
+      let odometer_image_path: string | null = null;
+      const odometer_image = formDataFile(formData, `unload_image_${truck.truck_id}`);
+      if (odometer_image) {
+        const truckRow = truckRowMap.get(truck.truck_id);
         const vehicleNumber = truckRow?.vehicle_number ?? "UNKNOWN";
         const primaryId = truckRow?.primary_truck_id;
         let truckSegment: string;
 
         if (primaryId) {
           const primaryTruckNumber = primaryNumbers.get(primaryId) ?? 1;
-          const { data: siblings } = await supabase
-            .from("journey_trucks")
-            .select("id")
-            .eq("primary_truck_id", primaryId)
-            .order("created_at", { ascending: true });
-          const secondaryIndex = siblings?.findIndex((row: any) => row.id === truck.truck_id) ?? 0;
+          const siblings = (allTruckRows ?? []).filter((r: any) => r.primary_truck_id === primaryId);
+          const secondaryIndex = siblings.findIndex((row: any) => row.id === truck.truck_id);
           truckSegment = secondaryTruckStorageLabel(
             primaryTruckNumber,
             secondaryIndex >= 0 ? secondaryIndex : 0,
@@ -201,17 +201,17 @@ export async function recordUnload(state: unknown, formData: FormData) {
           file: odometer_image,
         });
         odometer_image_path = await uploadOdometerImageStored(supabase, odometer_image, objectPath);
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : "Upload failed." };
       }
-    }
+      return { truckId: truck.truck_id, odometer_image_path };
+    })
+  );
+  const uploadedMap = new Map(uploadedUnloadPaths.map((u) => [u.truckId, u.odometer_image_path]));
+
+  for (const truck of payload.trucks) {
+    let odometer_image_path = uploadedMap.get(truck.truck_id) ?? null;
 
     if (!odometer_image_path) {
-      const { data: existingRow } = await supabase
-        .from("journey_trucks")
-        .select("odometer_image_path")
-        .eq("id", truck.truck_id)
-        .maybeSingle();
+      const existingRow = truckRowMap.get(truck.truck_id);
       odometer_image_path = (existingRow?.odometer_image_path as string | null) ?? null;
     }
 
@@ -305,5 +305,112 @@ export async function recordUnload(state: unknown, formData: FormData) {
   revalidatePath("/masters/districts");
   invalidateJourneyCaches();
   invalidateMasterCache("districts");
+  return { success: true };
+}
+
+function odometerFieldsAfterFinalDelete(truck: {
+  transfer_odometer_reading?: number | null;
+  transfer_odometer_image_path?: string | null;
+  start_odometer_reading?: number | null;
+  start_odometer_image_path?: string | null;
+  odometer_reading?: number | null;
+  odometer_image_path?: string | null;
+}) {
+  if (truck.transfer_odometer_image_path) {
+    return {
+      odometer_reading: truck.transfer_odometer_reading ?? truck.odometer_reading,
+      odometer_image_path: truck.transfer_odometer_image_path,
+    };
+  }
+  if (truck.start_odometer_image_path) {
+    return {
+      odometer_reading: truck.start_odometer_reading ?? truck.odometer_reading,
+      odometer_image_path: truck.start_odometer_image_path,
+    };
+  }
+  const path = truck.odometer_image_path;
+  if (path && /\/TP\//.test(path)) {
+    return {
+      odometer_reading: truck.transfer_odometer_reading ?? truck.odometer_reading,
+      odometer_image_path: path,
+    };
+  }
+  if (path && /\/SP\//.test(path)) {
+    return {
+      odometer_reading: truck.start_odometer_reading ?? truck.odometer_reading,
+      odometer_image_path: path,
+    };
+  }
+  return {
+    odometer_reading: truck.odometer_reading,
+    odometer_image_path: truck.odometer_image_path,
+  };
+}
+
+/** Clears saved final unload, drops, and final odometer; returns journey to transfer leg. */
+export async function deleteFinalUnloadRecording(journeyId: string) {
+  const supabase = (await createClient()) as any;
+  if (!journeyId) return { success: false, error: "Invalid journey." };
+
+  const { data: journey, error: journeyError } = await supabase
+    .from("journeys" as any)
+    .select("phase")
+    .eq("id", journeyId)
+    .maybeSingle();
+
+  if (journeyError) return { success: false, error: journeyError.message };
+  if (!journey) return { success: false, error: "Journey not found." };
+
+  const phase = normalizeJourneyPhase(journey.phase);
+  if (phase !== JourneyPhase.Final && phase !== JourneyPhase.Closed) {
+    return { success: false, error: "Final unload has not started for this journey." };
+  }
+
+  const { data: trucks, error: trucksError } = await supabase
+    .from("journey_trucks" as any)
+    .select(
+      "id, end_type, odometer_reading, odometer_image_path, start_odometer_reading, start_odometer_image_path, transfer_odometer_reading, transfer_odometer_image_path",
+    )
+    .eq("journey_id", journeyId);
+
+  if (trucksError) return { success: false, error: trucksError.message };
+
+  const finalTrucks = (trucks ?? []).filter((row: any) => row.end_type === "FINAL_POINT");
+  const truckIds = finalTrucks.map((row: any) => row.id as string);
+
+  if (truckIds.length > 0) {
+    const { error: dropsError } = await supabase
+      .from("truck_unload_drops" as any)
+      .delete()
+      .in("truck_id", truckIds);
+    if (dropsError) return { success: false, error: dropsError.message };
+
+    for (const truck of finalTrucks) {
+      const restored = odometerFieldsAfterFinalDelete(truck);
+      const { error: truckError } = await supabase
+        .from("journey_trucks" as any)
+        .update({
+          final_odometer_reading: null,
+          final_odometer_image_path: null,
+          odometer_reading: restored.odometer_reading,
+          odometer_image_path: restored.odometer_image_path,
+        } as any)
+        .eq("id", truck.id);
+      if (truckError) return { success: false, error: truckError.message };
+    }
+  }
+
+  const { error: phaseError } = await supabase
+    .from("journeys" as any)
+    .update({ phase: JourneyPhase.Transfer, final_at: null } as any)
+    .eq("id", journeyId);
+
+  if (phaseError) return { success: false, error: phaseError.message };
+
+  revalidatePath("/final");
+  revalidatePath("/transfer");
+  revalidatePath("/start");
+  revalidatePath("/overview");
+  invalidateJourneyCaches();
   return { success: true };
 }

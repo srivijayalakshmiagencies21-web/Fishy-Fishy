@@ -161,7 +161,7 @@ export function formatDistanceLegs(legs: TruckOdometerLegs, options?: { skipTran
     const direct = legKm(legs.start, legs.final);
     if (direct != null) parts.push(`Start→Final ${direct.toLocaleString()} km`);
   }
-  return parts.length > 0 ? parts.join(" · ") : null;
+  return parts.length > 0 ? parts.join(" | ") : null;
 }
 
 /** Start reading before transfer overwrites the live odometer column. */

@@ -27,8 +27,18 @@ export type DistrictRow = {
   companies: NamedRow[];
 };
 
+export type TransactionCategoryRow = {
+  id: number;
+  name: string;
+  transaction_type: "in" | "out" | "both";
+  cost_nature: string;
+  default_allocation: "company" | "ask" | "project";
+  active: boolean;
+};
+
 export type MasterData =
-  | { kind: "accounts" | "payment-modes" | "expenses"; rows: NamedRow[]; error: string | null }
+  | { kind: "accounts" | "payment-modes"; rows: NamedRow[]; error: string | null }
+  | { kind: "transactions"; rows: TransactionCategoryRow[]; error: string | null }
   | { kind: "vendors"; rows: VendorRow[]; error: string | null }
   | { kind: "fishes"; rows: FishRow[]; error: string | null }
   | { kind: "districts"; rows: DistrictRow[]; error: string | null };
@@ -69,11 +79,21 @@ export async function loadMasterWithClient(supabase: SupabaseServerClient, slug:
     };
   }
 
-  if (slug === "expenses") {
-    const { data, error } = await supabase.from("expenses").select("id, towards").order("towards");
+  if (slug === "transactions") {
+    const { data, error } = await supabase
+      .from("transaction_categories")
+      .select("id, name, transaction_type, cost_nature, default_allocation, active")
+      .order("name");
     return {
-      kind: "expenses",
-      rows: (data ?? []).map((row) => ({ id: row.id, label: row.towards })),
+      kind: "transactions",
+      rows: (data ?? []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        transaction_type: row.transaction_type as TransactionCategoryRow["transaction_type"],
+        cost_nature: row.cost_nature,
+        default_allocation: row.default_allocation as TransactionCategoryRow["default_allocation"],
+        active: row.active,
+      })),
       error: error ? readableError(error.message) : null,
     };
   }

@@ -13,7 +13,7 @@ const sourceSans = Source_Sans_3({
 export const metadata: Metadata = {
   title: {
     default: "Fishy-Fishy",
-    template: "%s · Fishy-Fishy",
+    template: "%s | Fishy-Fishy",
   },
   description: "Fish seed loading and logistics management app",
   manifest: "/manifest.json",
@@ -21,16 +21,6 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "Fishy-Fishy",
-  },
-  icons: {
-    icon: [
-      { url: "/favicon.ico" },
-      { url: "/icon.svg", type: "image/svg+xml" },
-      { url: "/icon.png", type: "image/png" },
-    ],
-    apple: [
-      { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
-    ],
   },
   other: {
     "mobile-web-app-capable": "yes",

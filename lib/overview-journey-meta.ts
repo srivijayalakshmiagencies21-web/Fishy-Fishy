@@ -12,10 +12,12 @@ function sortTrucks(trucks: OverviewTruckRow[]) {
   );
 }
 
+/** A journey skips transfer only when no truck routes through the transfer point. */
 export function overviewSkipsTransfer(trucks: OverviewTruckRow[] | undefined | null) {
-  const sorted = sortTrucks(trucks ?? []);
-  const startPrimary = sorted.find((t) => !t.primary_truck_id);
-  return (startPrimary?.end_type ?? "") === "FINAL_POINT";
+  const list = trucks ?? [];
+  if (list.length === 0) return false;
+  const usesTransfer = list.some((t) => t.primary_truck_id || t.end_type === "TRANSFER_POINT");
+  return !usesTransfer;
 }
 
 /** Start location (first primary / earliest truck). */

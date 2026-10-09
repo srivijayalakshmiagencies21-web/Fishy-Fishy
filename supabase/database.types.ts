@@ -183,23 +183,105 @@ export type Database = {
         };
         Relationships: [];
       };
-      expenses: {
+      transaction_categories: {
         Row: {
           id: number;
-          towards: string;
+          name: string;
+          transaction_type: string;
+          cost_nature: string;
+          default_allocation: string;
+          active: boolean;
           created_at: string;
         };
         Insert: {
           id?: number;
-          towards: string;
+          name: string;
+          transaction_type?: string;
+          cost_nature?: string;
+          default_allocation?: string;
+          active?: boolean;
           created_at?: string;
         };
         Update: {
           id?: number;
-          towards?: string;
+          name?: string;
+          transaction_type?: string;
+          cost_nature?: string;
+          default_allocation?: string;
+          active?: boolean;
           created_at?: string;
         };
         Relationships: [];
+      };
+      transactions: {
+        Row: {
+          id: number;
+          txn_date: string;
+          type: string;
+          account_id: number;
+          to_account_id: number | null;
+          amount: number;
+          category: string;
+          payment_mode: string;
+          party: string;
+          remarks: string;
+          journey_id: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: number;
+          txn_date?: string;
+          type: string;
+          account_id: number;
+          to_account_id?: number | null;
+          amount: number;
+          category?: string;
+          payment_mode?: string;
+          party?: string;
+          remarks?: string;
+          journey_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: number;
+          txn_date?: string;
+          type?: string;
+          account_id?: number;
+          to_account_id?: number | null;
+          amount?: number;
+          category?: string;
+          payment_mode?: string;
+          party?: string;
+          remarks?: string;
+          journey_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "transactions_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "transactions_to_account_id_fkey";
+            columns: ["to_account_id"];
+            isOneToOne: false;
+            referencedRelation: "accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "transactions_journey_id_fkey";
+            columns: ["journey_id"];
+            isOneToOne: false;
+            referencedRelation: "journeys";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       journeys: {
         Row: {

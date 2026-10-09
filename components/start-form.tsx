@@ -1,13 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, useEffect, useActionState, useTransition } from "react";
+import { useRef, useState, useEffect, useActionState } from "react";
 import type { DistrictRow, FishRow, VendorRow } from "@/lib/masters";
 import { OdometerSummaryDetail } from "@/components/odometer-summary-detail";
 import { resolveStageOdometer } from "@/lib/journey-odometer-legs";
-import { QuantityInput } from "@/components/quantity-input";
+import { FishQuantityRow } from "@/components/fish-quantity-row";
+import { NumericFieldInput } from "@/components/quantity-input";
 import { SelectField } from "@/components/select-field";
 import { createJourney, deleteJourney } from "@/app/(workspace)/start/actions";
+import { compressOdometerPhotoClient } from "@/lib/odometer-image-compress.client";
+import { submitCompressedFormAction } from "@/lib/submit-compressed-form-action";
 import { journeyPointBadgeLabel, splitJourneysByPointLane } from "@/lib/journey-point-lanes";
 import { truckEndTypeBadgeClass, truckEndTypeLabel } from "@/lib/journey-end-type-styles";
 import {
@@ -29,6 +32,9 @@ import {
 import { formatOdometerDisplayLabel } from "@/lib/odometer-display";
 import { truckDisplayName } from "@/lib/journey-truck-labels";
 import { JourneySummaryCard } from "@/components/journey-summary-card";
+import { isValidMobile, mobileDigits, MOBILE_DIGITS } from "@/lib/phone";
+import { scrollCanvasToTop } from "@/lib/scroll-canvas";
+import { FloatingAddButton } from "@/components/floating-add-button";
 
 
 export type SelectedFish = {
@@ -59,6 +65,41 @@ export type Truck = {
 
 function hasOdometerCapture(truck: Pick<Truck, "photoName" | "existingOdometerImagePath">) {
   return Boolean(truck.photoName || truck.existingOdometerImagePath);
+}
+
+function masterIdFromSelect(val: string): number | null {
+  if (!val) return null;
+  const n = Number(val);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function applySingleMasterDefaults(
+  trucks: Truck[],
+  transporters: VendorRow[],
+  suppliers: VendorRow[],
+): Truck[] {
+  const soleTransporterId = transporters.length === 1 ? transporters[0]!.id : null;
+  const soleSupplierId = suppliers.length === 1 ? suppliers[0]!.id : null;
+  if (soleTransporterId == null && soleSupplierId == null) return trucks;
+
+  let changed = false;
+  const next = trucks.map((truck) => {
+    let t = truck;
+    if (t.transporter_id == null && soleTransporterId != null) {
+      changed = true;
+      t = { ...t, transporter_id: soleTransporterId };
+    }
+    const items = t.items.map((item) => {
+      if (item.supplier_id == null && soleSupplierId != null) {
+        changed = true;
+        return { ...item, supplier_id: soleSupplierId };
+      }
+      return item;
+    });
+    if (items !== t.items) t = { ...t, items };
+    return t;
+  });
+  return changed ? next : trucks;
 }
 
 export type NestedJourney = {
@@ -102,7 +143,6 @@ export function StartPointForm({
 }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(createJourney, null);
-  const [, startTransition] = useTransition();
   const [viewState, setViewState] = useState<'list' | 'new' | 'edit'>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
@@ -110,7 +150,13 @@ export function StartPointForm({
   const [isDeleting, setIsDeleting] = useState(false);
   const [laneView, setLaneView] = useState<JourneyPointLaneView>("in_progress");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const odometerFilesRef = useRef(new Map<string, File>());
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const registerOdometerFile = (fieldName: string, file: File | null) => {
+    if (file) odometerFilesRef.current.set(fieldName, file);
+    else odometerFilesRef.current.delete(fieldName);
+  };
 
   const { inProgress: inProgressJourneys, closed: closedJourneys } = splitJourneysByPointLane(
     "start",
@@ -136,7 +182,10 @@ export function StartPointForm({
     photoName: null,
   });
 
-  const [trucks, setTrucks] = useState<Truck[]>([defaultTruck(true)]);
+  const makeInitialTrucks = () =>
+    applySingleMasterDefaults([defaultTruck(true)], transporters, suppliers);
+
+  const [trucks, setTrucks] = useState<Truck[]>(makeInitialTrucks);
   const [activeTruck, setActiveTruck] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -153,6 +202,11 @@ export function StartPointForm({
   }, [editingId]);
 
   useEffect(() => {
+    if (!isLoaded) return;
+    setTrucks((prev) => applySingleMasterDefaults(prev, transporters, suppliers));
+  }, [isLoaded, transporters, suppliers]);
+
+  useEffect(() => {
     if (isLoaded && !editingId) {
       localStorage.setItem("journey_draft", JSON.stringify({ route, trucks }));
     }
@@ -161,7 +215,7 @@ export function StartPointForm({
   useEffect(() => {
     if (!state?.success) return;
     setViewState("list");
-    setTrucks([defaultTruck(true)]);
+    setTrucks(makeInitialTrucks());
     setRoute({ location_name: "", district_id: null });
     setEditingId(null);
     setSubmitError(null);
@@ -211,7 +265,8 @@ export function StartPointForm({
   const addTruck = () => {
     const nextIndex = trucks.length;
     scrollToTruckIndexRef.current = nextIndex;
-    setTrucks([...trucks, defaultTruck()]);
+    const [nextTruck] = applySingleMasterDefaults([defaultTruck()], transporters, suppliers);
+    setTrucks((prev) => [...prev, nextTruck!]);
     setActiveTruck(nextIndex);
   };
 
@@ -239,18 +294,34 @@ export function StartPointForm({
     });
   };
 
-  const isTruckFilled = (truck: Truck) => {
-    if (!truck.transporter_id || !truck.vehicle_number || !truck.driver_name || !truck.driver_phone || truck.odometer_reading === "" || !truck.end_type) return false;
-    if (!hasOdometerCapture(truck)) return false;
-    if (truck.items.length === 0) return false;
+  const truckIncompleteHints = (truck: Truck): string[] => {
+    const hints: string[] = [];
+    if (!truck.transporter_id) hints.push("transporter");
+    if (!truck.vehicle_number.trim()) hints.push("vehicle number");
+    if (!truck.driver_name.trim()) hints.push("driver name");
+    if (!isValidMobile(truck.driver_phone)) hints.push("10-digit driver mobile");
+    if (truck.odometer_reading === "") hints.push("odometer reading");
+    if (!hasOdometerCapture(truck)) hints.push("odometer photo");
+    if (!truck.end_type) hints.push("Final Point or Transfer Point");
+    if (truck.items.length === 0) {
+      hints.push("supplier and fish quantities (scroll to Supplier Details)");
+      return hints;
+    }
+    let supplierOk = true;
     for (const item of truck.items) {
-      if (!item.supplier_id || item.fishes.length === 0) return false;
+      if (!item.supplier_id) supplierOk = false;
+      if (item.fishes.length === 0) supplierOk = false;
       for (const fish of item.fishes) {
-        if (!fish.fish_id || fish.quantity === "" || Number(fish.quantity) <= 0) return false;
+        if (!fish.fish_id || fish.quantity === "" || Number(fish.quantity) <= 0) supplierOk = false;
       }
     }
-    return true;
+    if (!supplierOk) {
+      hints.push("supplier, fish type(s), and a quantity greater than 0 for each (Supplier Details below)");
+    }
+    return hints;
   };
+
+  const isTruckFilled = (truck: Truck) => truckIncompleteHints(truck).length === 0;
 
   const canAddTruck = trucks.every(isTruckFilled);
 
@@ -265,74 +336,81 @@ export function StartPointForm({
   };
 
   const addVendor = (truckId: string) => {
-    setTrucks(trucks.map(t => {
-      if (t.id === truckId) {
-        return { ...t, items: [...t.items, { id: generateId(), supplier_id: null, fishes: [] }] };
-      }
-      return t;
-    }));
+    setTrucks((prev) =>
+      prev.map((t) => {
+        if (t.id !== truckId) return t;
+        const soleSupplierId = suppliers.length === 1 ? suppliers[0]!.id : null;
+        return {
+          ...t,
+          items: [
+            ...t.items,
+            { id: generateId(), supplier_id: soleSupplierId, fishes: [] },
+          ],
+        };
+      }),
+    );
   };
   const removeVendor = (truckId: string, itemId: string) => {
-    setTrucks(trucks.map(t => {
-      if (t.id === truckId) {
-        return { ...t, items: t.items.filter(i => i.id !== itemId) };
-      }
-      return t;
-    }));
+    setTrucks((prev) =>
+      prev.map((t) =>
+        t.id === truckId ? { ...t, items: t.items.filter((i) => i.id !== itemId) } : t,
+      ),
+    );
   };
 
   const updateTruck = (truckId: string, field: keyof Truck, value: any) => {
-    setTrucks(trucks.map(t => (t.id === truckId ? { ...t, [field]: value } : t)));
+    setTrucks((prev) => prev.map((t) => (t.id === truckId ? { ...t, [field]: value } : t)));
   };
 
   const updateItem = (truckId: string, itemId: string, field: keyof TruckItem, value: any) => {
-    setTrucks(trucks.map(t => {
-      if (t.id === truckId) {
+    setTrucks((prev) =>
+      prev.map((t) => {
+        if (t.id !== truckId) return t;
         return {
           ...t,
-          items: t.items.map(i => (i.id === itemId ? { ...i, [field]: value } : i))
+          items: t.items.map((i) => (i.id === itemId ? { ...i, [field]: value } : i)),
         };
-      }
-      return t;
-    }));
+      }),
+    );
   };
 
   const updateItemFishes = (truckId: string, itemId: string, fishIds: number[]) => {
-    setTrucks(trucks.map(t => {
-      if (t.id === truckId) {
+    setTrucks((prev) =>
+      prev.map((t) => {
+        if (t.id !== truckId) return t;
         return {
-          ...t, items: t.items.map(item => {
-            if (item.id === itemId) {
-              const newFishes: SelectedFish[] = fishIds.map(fid => {
-                const existing = item.fishes.find(f => f.fish_id === fid);
-                return existing ? existing : { fish_id: fid, quantity: "" };
-              });
-              return { ...item, fishes: newFishes };
-            }
-            return item;
-          })
+          ...t,
+          items: t.items.map((item) => {
+            if (item.id !== itemId) return item;
+            const newFishes: SelectedFish[] = fishIds.map((fid) => {
+              const existing = item.fishes.find((f) => f.fish_id === fid);
+              return existing ? existing : { fish_id: fid, quantity: "" };
+            });
+            return { ...item, fishes: newFishes };
+          }),
         };
-      }
-      return t;
-    }));
+      }),
+    );
   };
 
   const updateFishQuantity = (truckId: string, itemId: string, fishId: number, qty: number | "") => {
-    setTrucks(trucks.map(t => {
-      if (t.id === truckId) {
+    setTrucks((prev) =>
+      prev.map((t) => {
+        if (t.id !== truckId) return t;
         return {
-          ...t, items: t.items.map(item => {
-            if (item.id === itemId) {
-              return {
-                ...item, fishes: item.fishes.map(f => f.fish_id === fishId ? { ...f, quantity: qty } : f)
-              };
-            }
-            return item;
-          })
+          ...t,
+          items: t.items.map((item) => {
+            if (item.id !== itemId) return item;
+            return {
+              ...item,
+              fishes: item.fishes.map((f) =>
+                f.fish_id === fishId ? { ...f, quantity: qty } : f,
+              ),
+            };
+          }),
         };
-      }
-      return t;
-    }));
+      }),
+    );
   };
 
   const editingJourney = viewState === 'edit' ? activeJourneys.find((j) => j.id === editingId) : null;
@@ -378,11 +456,16 @@ export function StartPointForm({
       };
     });
 
-    setTrucks(mappedTrucks.length > 0 ? mappedTrucks : [defaultTruck(true)]);
+    setTrucks(
+      mappedTrucks.length > 0
+        ? applySingleMasterDefaults(mappedTrucks, transporters, suppliers)
+        : makeInitialTrucks(),
+    );
     setActiveTruck(0);
     setEditingId(journey.id);
     setSubmitError(null);
     setViewState('edit');
+    scrollCanvasToTop();
     setOpenDropdownId(null);
   };
 
@@ -543,7 +626,8 @@ export function StartPointForm({
             type="button" 
             onClick={() => {
               setViewState('new');
-              setTrucks([defaultTruck(true)]);
+              setTrucks(makeInitialTrucks());
+              scrollCanvasToTop();
             }} 
             className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full bg-blue px-8 py-4 font-semibold text-white shadow-[0_0_40px_-10px_rgba(15,76,129,0.5)] transition-all hover:scale-105 hover:shadow-[0_0_60px_-15px_rgba(15,76,129,0.7)]"
           >
@@ -557,7 +641,7 @@ export function StartPointForm({
   }
 
   return (
-    <div className="space-y-6 sm:space-y-8 pb-20 sm:pb-12 animate-in slide-in-from-bottom-4 fade-in duration-500 w-full max-w-4xl mx-auto px-2 sm:px-0">
+    <div className="space-y-6 sm:space-y-8 pb-20 sm:pb-12 w-full max-w-4xl mx-auto px-2 sm:px-0">
       <div className="flex flex-col sm:flex-row sm:items-center gap-4 px-2 sm:px-1">
         <div className="flex items-center gap-3 sm:gap-5">
           <button 
@@ -595,7 +679,7 @@ export function StartPointForm({
               setActiveTruck(i);
               requestAnimationFrame(() => scrollToTruckIndex(i, "auto"));
               setSubmitError(
-                `Complete Primary Truck ${i + 1} — transporter, vehicle, driver, odometer photo, destination, and fish quantities.`,
+                `Primary Truck ${i + 1} still needs: ${truckIncompleteHints(trucks[i]).join(", ")}.`,
               );
               return;
             }
@@ -610,9 +694,10 @@ export function StartPointForm({
           localStorage.removeItem("journey_draft");
           const formData = new FormData(form);
           formData.set("payload", JSON.stringify({ route, trucks }));
-          startTransition(() => {
-            formAction(formData);
-          });
+          for (const [fieldName, file] of odometerFilesRef.current) {
+            formData.set(fieldName, file);
+          }
+          void submitCompressedFormAction(formData, formAction);
         }}
       >
         {editingJourney && <input type="hidden" name="db_id" value={editingJourney.journeyId} />}
@@ -625,7 +710,7 @@ export function StartPointForm({
         ) : null}
 
         {/* Global Journey Route Details */}
-        <section className="relative overflow-hidden rounded-xl sm:rounded-2xl bg-white border border-gray-100 shadow-sm transition-all duration-500 animate-in slide-in-from-bottom-8 fade-in">
+        <section className="relative overflow-hidden rounded-xl sm:rounded-2xl bg-white border border-gray-100 shadow-sm">
           <div className="border-b border-gray-100 bg-gradient-to-r from-gray-50/80 to-white px-4 sm:px-5 py-3 flex justify-between items-center relative">
             <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-purple-500 to-purple-300"></div>
             <div className="flex items-center gap-2 sm:gap-3">
@@ -655,9 +740,11 @@ export function StartPointForm({
                 <div className="transition-all duration-300 group-focus-within:shadow-[0_0_0_3px_rgba(168,85,247,0.1)] rounded-xl">
                   <SelectField 
                      name="journey_district"
-                     required 
-                     defaultValue={route.district_id?.toString() || ""}
-                     onChange={val => setRoute({...route, district_id: Number(val)})}
+                     required
+                     value={route.district_id != null ? String(route.district_id) : ""}
+                     onChange={(val) =>
+                       setRoute((prev) => ({ ...prev, district_id: masterIdFromSelect(val) }))
+                     }
                      placeholder="Select District…"
                      options={districts.map(d => ({ value: d.id.toString(), label: d.name }))}
                   />
@@ -668,9 +755,8 @@ export function StartPointForm({
         </section>
 
         <div className="relative group/carousel space-y-4">
-          <div className="flex items-center justify-between px-2 sm:px-4">
-            {/* Left Spacer to balance the right icon */}
-            <div className="w-8"></div>
+          <div className="flex items-center justify-center px-2 sm:px-4 md:justify-between">
+            <div className="hidden w-8 md:block" aria-hidden />
             
             <div className="flex items-center justify-center">
               {trucks.length > 1 && (
@@ -684,8 +770,11 @@ export function StartPointForm({
                 </button>
               )}
               
-              <h3 className="text-sm font-bold uppercase tracking-widest text-gray-500 mx-4">
-                Start Point Trucks {trucks.length > 1 && <span className="text-gray-400 font-medium">({activeTruck + 1}/{trucks.length})</span>}
+              <h3 className="mx-2 shrink-0 whitespace-nowrap text-xs font-bold uppercase tracking-wide text-gray-500 sm:mx-4 sm:text-sm sm:tracking-widest">
+                Start Point Trucks
+                {trucks.length > 1 ? (
+                  <span className="font-medium text-gray-400"> ({activeTruck + 1}/{trucks.length})</span>
+                ) : null}
               </h3>
               
               {trucks.length > 1 && (
@@ -700,7 +789,7 @@ export function StartPointForm({
               )}
             </div>
             
-            <div className="flex justify-end w-8">
+            <div className="hidden w-8 justify-end md:flex">
               <button 
                 type="button" 
                 onClick={addTruck} 
@@ -716,7 +805,7 @@ export function StartPointForm({
           <div ref={trucksContainerRef} onScroll={handleTrucksScroll} className="flex w-full gap-4 overflow-x-auto snap-x snap-mandatory hide-scrollbar pb-4">
             {trucks.map((truck, tIndex) => (
               <div key={truck.id} className="w-full min-w-full flex-[0_0_100%] snap-center">
-                <section className="relative overflow-hidden rounded-xl sm:rounded-2xl bg-white border border-gray-100 shadow-sm transition-all duration-500 animate-in slide-in-from-bottom-8 fade-in">
+                <section className="relative overflow-hidden rounded-xl sm:rounded-2xl bg-white border border-gray-100 shadow-sm">
             {/* Header */}
             <div className="border-b border-gray-100 bg-gradient-to-r from-gray-50/80 to-white px-4 sm:px-5 py-3 flex justify-between items-center relative">
               <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-500 to-blue-300"></div>
@@ -757,8 +846,10 @@ export function StartPointForm({
                       <SelectField 
                          name={`transporter_${truck.id}`}
                          required={tIndex === activeTruck}
-                         defaultValue={truck.transporter_id?.toString() || ""}
-                         onChange={val => updateTruck(truck.id, "transporter_id", Number(val))}
+                         value={truck.transporter_id != null ? String(truck.transporter_id) : ""}
+                         onChange={(val) =>
+                           updateTruck(truck.id, "transporter_id", masterIdFromSelect(val))
+                         }
                          placeholder="Select transporter…"
                          options={transporters.map(t => ({ value: t.id.toString(), label: t.name }))}
                       />
@@ -793,12 +884,13 @@ export function StartPointForm({
                     <span className="label text-xs sm:text-[0.8125rem] transition-colors group-focus-within:text-blue-600">Driver Mobile</span>
                     <input 
                        type="tel" 
+                       inputMode="numeric"
+                       maxLength={MOBILE_DIGITS}
+                       pattern="\d{10}"
+                       title="Enter a 10-digit mobile number"
                        required={tIndex === activeTruck}
                        value={truck.driver_phone}
-                       onChange={e => {
-                         const digitsOnly = e.target.value.replace(/\D/g, '');
-                         updateTruck(truck.id, "driver_phone", digitsOnly);
-                       }}
+                       onChange={e => updateTruck(truck.id, "driver_phone", mobileDigits(e.target.value))}
                        placeholder="10-digit number" 
                        className="input-field shadow-sm transition-all duration-300 focus:shadow-[0_0_0_3px_rgba(15,76,129,0.1)]"
                     />
@@ -806,16 +898,12 @@ export function StartPointForm({
 
                   <label className="block space-y-1 sm:space-y-1.5 group">
                     <span className="label text-xs sm:text-[0.8125rem] transition-colors group-focus-within:text-blue-600">Odometer Reading</span>
-                    <input 
-                       type="number" 
+                    <NumericFieldInput
                        required={tIndex === activeTruck}
                        value={truck.odometer_reading}
-                       onChange={e => {
-                         const raw = e.target.value;
-                         updateTruck(truck.id, "odometer_reading", raw === "" ? "" : Number(raw));
-                       }}
-                       placeholder="Total KM" 
-                       className="input-field shadow-sm transition-all duration-300 focus:shadow-[0_0_0_3px_rgba(15,76,129,0.1)]" 
+                       onChange={(next) => updateTruck(truck.id, "odometer_reading", next)}
+                       placeholder="Total KM"
+                       className="input-field shadow-sm transition-all duration-300 focus:shadow-[0_0_0_3px_rgba(15,76,129,0.1)]"
                     />
                   </label>
 
@@ -831,7 +919,18 @@ export function StartPointForm({
                         capture="environment" 
                         required={tIndex === activeTruck && !hasOdometerCapture(truck)} 
                         className="absolute inset-0 h-full w-full cursor-pointer opacity-0" 
-                        onChange={(e) => updateTruck(truck.id, "photoName", e.target.files?.[0]?.name ?? null)}
+                        onChange={(e) => {
+                          const raw = e.target.files?.[0] ?? null;
+                          if (!raw) {
+                            updateTruck(truck.id, "photoName", null);
+                            registerOdometerFile(`odometer_image_${truck.id}`, null);
+                            return;
+                          }
+                          updateTruck(truck.id, "photoName", raw.name);
+                          void compressOdometerPhotoClient(raw).then((compressed) => {
+                            registerOdometerFile(`odometer_image_${truck.id}`, compressed);
+                          });
+                        }}
                       />
                       {hasOdometerCapture(truck) ? (
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-green-600 shrink-0">
@@ -931,8 +1030,15 @@ export function StartPointForm({
                               <SelectField 
                                  name={`supplier_${item.id}`}
                                  required={tIndex === activeTruck}
-                                 defaultValue={item.supplier_id?.toString() || ""}
-                                 onChange={val => updateItem(truck.id, item.id, "supplier_id", Number(val))}
+                                 value={item.supplier_id != null ? String(item.supplier_id) : ""}
+                                 onChange={(val) =>
+                                   updateItem(
+                                     truck.id,
+                                     item.id,
+                                     "supplier_id",
+                                     masterIdFromSelect(val),
+                                   )
+                                 }
                                  placeholder="Select supplier…"
                                  options={suppliers.map(s => ({ value: s.id.toString(), label: s.name }))}
                               />
@@ -972,29 +1078,16 @@ export function StartPointForm({
                               {item.fishes.map(selectedFish => {
                                 const fishRecord = fishes.find(f => f.id === selectedFish.fish_id);
                                 return (
-                                  <div
+                                  <FishQuantityRow
                                     key={selectedFish.fish_id}
-                                    className="grid grid-cols-[minmax(0,1fr)_8rem] items-center gap-x-3 gap-y-2 rounded-lg border border-rose-100 bg-white p-2.5 pl-2 shadow-sm sm:pl-2.5"
-                                  >
-                                    <div className="grid min-w-0 grid-cols-3 items-center">
-                                      <span className="min-w-0 truncate text-sm font-semibold text-gray-700">
-                                        {fishRecord?.fishType}
-                                      </span>
-                                      <span className="justify-self-center whitespace-nowrap rounded-md bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-600/70">
-                                        {fishRecord?.seedSize ?? "—"}
-                                      </span>
-                                      <span aria-hidden className="min-w-0" />
-                                    </div>
-                                    <QuantityInput
-                                      required={tIndex === activeTruck}
-                                      value={selectedFish.quantity}
-                                      onChange={(next) =>
-                                        updateFishQuantity(truck.id, item.id, selectedFish.fish_id, next)
-                                      }
-                                      placeholder="Qty"
-                                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-right tabular-nums font-medium text-gray-900 transition-all focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
-                                    />
-                                  </div>
+                                    fishType={fishRecord?.fishType ?? "Fish"}
+                                    seedSize={fishRecord?.seedSize}
+                                    value={selectedFish.quantity}
+                                    quantityRequired={tIndex === activeTruck}
+                                    onChange={(next) =>
+                                      updateFishQuantity(truck.id, item.id, selectedFish.fish_id, next)
+                                    }
+                                  />
                                 );
                               })}
                             </div>
@@ -1012,12 +1105,22 @@ export function StartPointForm({
     </div>
   </div>
 
-  <div className="pt-4 sm:pt-6"></div>
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 z-50 sm:relative sm:bg-transparent sm:backdrop-blur-none sm:border-t-0 sm:p-0">
-          <button type="submit" disabled={pending} className="w-full flex items-center justify-center gap-2 rounded-xl sm:rounded-full bg-blue px-6 py-4 text-base font-bold text-white shadow-lg transition-all hover:bg-blue-dark disabled:opacity-50">
-            {pending ? "Saving..." : (editingJourney ? "Save Changes" : "Start journey")}
-          </button>
-        </div>
+      <FloatingAddButton
+        onClick={addTruck}
+        disabled={!canAddTruck}
+        title={canAddTruck ? "Add another truck" : "Fill current truck details completely to add another"}
+        ariaLabel="Add another truck"
+        mobileBottom="tab"
+      />
+      <div className="pt-4 sm:pt-6">
+        <button
+          type="submit"
+          disabled={pending}
+          className="flex w-full items-center justify-center gap-2 rounded-full bg-blue px-6 py-4 text-base font-bold text-white shadow-lg transition-all hover:bg-blue-dark disabled:opacity-50"
+        >
+          {pending ? "Saving..." : editingJourney ? "Save Changes" : "Start journey"}
+        </button>
+      </div>
       </form>
     </div>
   );

@@ -1,6 +1,12 @@
 export const appPages = [
   { key: "masters", label: "Masters", href: "/masters/accounts", description: "Reference lists used across the workspace." },
   { key: "overview", label: "Overview", href: "/overview", description: "Track active journeys across all points." },
+  {
+    key: "finance",
+    label: "Finance",
+    href: "/finance",
+    description: "Record money in, money out, and transfers between accounts.",
+  },
   { key: "start", label: "Start Point", href: "/start", description: "Where a load leaves from." },
   { key: "transfer", label: "Transfer Point", href: "/transfer", description: "Where a load changes hands." },
   { key: "final", label: "Final Point", href: "/final", description: "Where a load arrives." },
