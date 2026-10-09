@@ -6,9 +6,11 @@ export function secondaryTruckCode(primaryNumber: number, secondaryIndex: number
 }
 
 export function sortJourneyTrucks(journey: JourneySummary) {
-  return [...(journey.trucks ?? [])].sort(
-    (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime(),
-  );
+  return [...(journey.trucks ?? [])].sort((a, b) => {
+    const timeDiff = new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime();
+    if (timeDiff !== 0) return timeDiff;
+    return (a.id ?? "").localeCompare(b.id ?? "");
+  });
 }
 
 /** Start-point primaries (no parent truck). */
@@ -71,13 +73,22 @@ export type FinalUnloadTruckLabel = {
   kind: "primary" | "secondary";
   primaryTruckId: string | null;
   primaryNumber: number | null;
+  /** PT{n} or ST{n}{letter} for odometer capture display / storage segment */
+  odometerTruckSegment: string;
 };
 
 export function finalUnloadTruckLabel(journey: JourneySummary, truckId: string): FinalUnloadTruckLabel {
   const sorted = sortJourneyTrucks(journey);
   const truck = sorted.find((row) => row.id === truckId);
   if (!truck) {
-    return { title: "Truck details", subtitle: "", kind: "secondary", primaryTruckId: null, primaryNumber: null };
+    return {
+      title: "Truck details",
+      subtitle: "",
+      kind: "secondary",
+      primaryTruckId: null,
+      primaryNumber: null,
+      odometerTruckSegment: "ST1A",
+    };
   }
 
   const primaries = startPrimaryTrucks(journey);
@@ -90,6 +101,7 @@ export function finalUnloadTruckLabel(journey: JourneySummary, truckId: string):
       kind: "primary",
       primaryTruckId: truck.id,
       primaryNumber: num,
+      odometerTruckSegment: `PT${num}`,
     };
   }
 
@@ -107,7 +119,20 @@ export function finalUnloadTruckLabel(journey: JourneySummary, truckId: string):
     kind: "secondary",
     primaryTruckId: primaryId,
     primaryNumber: primaryNum,
+    odometerTruckSegment: `ST${code}`,
   };
+}
+
+export function truckDisplayName(journey: any, truckOrId: any, fallbackIndex = 0): string {
+  const truckId = typeof truckOrId === "string" ? truckOrId : String(truckOrId?.id ?? "");
+  if (!journey || !truckId) {
+    return `Primary Truck ${fallbackIndex + 1}`;
+  }
+  const label = finalUnloadTruckLabel(journey, truckId);
+  if (label.title && label.title !== "Truck details") {
+    return label.title.replace(/\s+Details$/i, "");
+  }
+  return `Primary Truck ${fallbackIndex + 1}`;
 }
 
 export type FinalUnloadGroup = {

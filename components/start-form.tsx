@@ -26,6 +26,10 @@ import {
   startSummaryTruckTotalQty,
   startSummaryTrucks,
 } from "@/lib/journey-start-summary";
+import { formatOdometerDisplayLabel } from "@/lib/odometer-display";
+import { truckDisplayName } from "@/lib/journey-truck-labels";
+import { JourneySummaryCard } from "@/components/journey-summary-card";
+
 
 export type SelectedFish = {
   fish_id: number;
@@ -396,211 +400,90 @@ export function StartPointForm({
     const expanded = expandedIds.has(journey.id);
     const hasStartQtyArchive = startSummaryHasArchivedQuantities(journey);
 
-    return (
-    <section key={journey.id} className={`surface overflow-hidden ${closed ? "opacity-90" : ""}`}>
-      <div className="border-b border-line bg-blue-soft/30 px-5 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-bold text-blue-dark">Journey #{journey.db_id}</h2>
-          <span className="text-gray-400 font-medium text-xs bg-gray-50/80 px-2 py-1 rounded">
-            Submitted on{" "}
-            {new Date(journey.startTime).toLocaleString("en-IN", {
-              year: "numeric",
-              month: "short",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${
-              closed ? "bg-gray-100 text-gray-600" : "bg-green-100 text-green-700"
-            }`}
-          >
-            {journeyPointBadgeLabel("start", journey.phase)}
-          </span>
-          <button
-            type="button"
-            onClick={() =>
-              setExpandedIds((prev) => {
-                const next = new Set(prev);
-                if (next.has(journey.id)) next.delete(journey.id);
-                else next.add(journey.id);
-                return next;
-              })
-            }
-            className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 transition-colors hover:text-blue-800"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-3.5 w-3.5"
-            >
-              {expanded ? <polyline points="18 15 12 9 6 15" /> : <polyline points="6 9 12 15 18 9" />}
-            </svg>
-            {expanded ? "Hide Details" : "View Details"}
-          </button>
-          {!closed ? (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setOpenDropdownId(openDropdownId === journey.id ? null : journey.id)}
-                className="p-1.5 rounded-full hover:bg-white/50 text-blue-600 transition-colors"
-                title="Options"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-                  <circle cx="12" cy="12" r="1" />
-                  <circle cx="12" cy="5" r="1" />
-                  <circle cx="12" cy="19" r="1" />
-                </svg>
-              </button>
-              {openDropdownId === journey.id ? (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setOpenDropdownId(null)} />
-                  <div className="absolute right-0 mt-1 w-36 bg-white rounded-lg shadow-lg border border-gray-100 z-20 py-1 overflow-hidden">
-                    <button onClick={() => handleEditJourney(journey)} className="w-full text-left px-4 py-2 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                      Edit
-                    </button>
-                    <button onClick={() => { setDeleteJourneyId(journey.id); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors">
-                      Delete
-                    </button>
-                  </div>
-                </>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      </div>
-      <div className="p-5">
-        <div className="flex items-center gap-2 mb-4 text-sm font-semibold text-gray-800">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-purple-600 shrink-0">
-            <circle cx="12" cy="12" r="10" />
-            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-          </svg>
-          {routeTruck?.location_name || "Start"}
-          <span className="text-gray-400 font-normal mx-1">→</span>
-          {resolveDistrictName(districts, routeTruck?.district_id, routeTruck?.district_name)}
-        </div>
-        {closed && !hasStartQtyArchive ? (
-          <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
-            Start quantities were not saved for this journey before transfer. Only quantities entered on the start page are
-            shown here — not transfer or final point data. Create a new journey after the database update to archive start
-            entries automatically.
-          </p>
-        ) : null}
-        <div className="space-y-1">
-          {startTrucks.map((truck: any, index: number) => {
-            const totalQty = startSummaryTruckTotalQty(journey, truck);
-            return (
-              <div key={truck.id ?? index} className="grid grid-cols-[minmax(0,1fr)_7.5rem_7.25rem] items-center gap-x-3 border-t border-gray-100 py-2.5 text-sm first:border-t-0 max-sm:grid-cols-1 max-sm:gap-y-2">
-                <div className="flex min-w-0 items-center gap-3 font-medium text-gray-800">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0 text-blue-500">
-                    <rect x="1" y="3" width="15" height="13" />
-                    <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
-                    <circle cx="5.5" cy="18.5" r="2.5" />
-                    <circle cx="18.5" cy="18.5" r="2.5" />
-                  </svg>
-                  <div className="flex min-w-0 items-center divide-x divide-gray-200">
-                    <span className="shrink-0 pr-2.5 font-semibold text-gray-900 sm:w-28 sm:pr-3">{truck.vehicle_number}</span>
-                    <span className="min-w-0 max-w-[5.5rem] truncate px-2.5 sm:w-32 sm:max-w-none sm:px-3">{truck.driver_name}</span>
-                    <span className="shrink-0 whitespace-nowrap pl-2.5 tabular-nums text-gray-600 sm:pl-3">{truck.driver_phone}</span>
-                  </div>
-                </div>
-                <span className={`max-sm:justify-self-start justify-self-center whitespace-nowrap rounded px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-widest ${truckEndTypeBadgeClass(truck.end_type)}`}>
-                  {truckEndTypeLabel(truck.end_type)}
-                </span>
-                <div className="max-sm:justify-self-start justify-self-end whitespace-nowrap text-right font-bold tabular-nums text-blue-600">
-                  {totalQty === null ? (
-                    <span className="text-gray-400">—</span>
-                  ) : (
-                    <>
-                      {totalQty.toLocaleString()}{" "}
-                      <span className="text-xs font-semibold uppercase tracking-wide text-blue-500">Qty</span>
-                    </>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+    const truckRows = startTrucks.map((truck: any) => ({
+      truck: {
+        ...truck,
+        items: startSummaryItemsForTruck(journey, truck),
+      },
+      badge: truckEndTypeLabel(truck.end_type),
+      badgeClass: truckEndTypeBadgeClass(truck.end_type),
+    }));
 
-      {expanded ? (
-        <div className="space-y-5 border-t border-gray-100 bg-gray-50/50 px-5 py-4">
-          <p className="text-[0.65rem] font-bold uppercase tracking-widest text-gray-400">Starting Point — Full Details</p>
-          {startTrucks.map((truck: any, tIdx: number) => {
-            const items = startSummaryItemsForTruck(journey, truck);
-            return (
-              <div key={truck.id ?? tIdx} className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="h-3.5 w-3.5 shrink-0 text-blue-500"
-                  >
-                    <rect x="1" y="3" width="15" height="13" />
-                    <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
-                    <circle cx="5.5" cy="18.5" r="2.5" />
-                    <circle cx="18.5" cy="18.5" r="2.5" />
-                  </svg>
-                  <span className="text-xs font-bold text-gray-800">{truck.vehicle_number ?? "—"}</span>
-                  <span
-                    className={`ml-1 rounded px-1.5 py-0.5 text-[0.6rem] font-bold uppercase tracking-widest ${truckEndTypeBadgeClass(truck.end_type)}`}
-                  >
-                    {truckEndTypeLabel(truck.end_type)}
-                  </span>
-                </div>
-                {(() => {
-                  const stageOdo = resolveStageOdometer(truck, "Start odometer");
-                  return (
-                    <OdometerSummaryDetail
-                      label="Start odometer"
-                      reading={stageOdo.reading}
-                      imagePath={stageOdo.imagePath}
-                    />
-                  );
-                })()}
-                <div className="space-y-1 pl-5">
-                  {items.map((item, iIdx) => {
-                    const seedSize = startSummaryItemSeedSize(item);
-                    return (
-                      <div
-                        key={`${item.supplier_id}-${item.fish_id}-${iIdx}`}
-                        className="flex items-center justify-between border-b border-gray-100 py-1.5 text-xs text-gray-600 last:border-0"
-                      >
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-semibold text-gray-800">{startSummaryItemSupplierName(item)}</span>
-                          <span className="text-gray-300">·</span>
-                          <span>{startSummaryItemFishType(item)}</span>
-                          {seedSize ? (
-                            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[0.6rem] font-semibold text-gray-500">
-                              {seedSize}
-                            </span>
-                          ) : null}
-                        </div>
-                        <span className="ml-4 whitespace-nowrap font-bold text-gray-800">
-                          {Number(item.quantity).toLocaleString()}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-                {tIdx < startTrucks.length - 1 ? <div className="border-t border-gray-200 pt-1" /> : null}
-              </div>
-            );
-          })}
-        </div>
-      ) : null}
-    </section>
+    const cardJourney = {
+      ...journey,
+      startLocation: routeTruck?.location_name || "Start",
+      district: resolveDistrictName(districts, routeTruck?.district_id, routeTruck?.district_name),
+    };
+
+    const statusBadge = (
+      <span
+        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+          closed ? "bg-slate-100 text-slate-600" : "bg-emerald-100 text-emerald-700"
+        }`}
+      >
+        {journeyPointBadgeLabel("start", journey.phase)}
+      </span>
+    );
+
+    const optionsMenu = !closed ? (
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setOpenDropdownId(openDropdownId === journey.id ? null : journey.id)}
+          className="p-1.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors"
+          title="Options"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+            <circle cx="12" cy="12" r="1" />
+            <circle cx="12" cy="5" r="1" />
+            <circle cx="12" cy="19" r="1" />
+          </svg>
+        </button>
+        {openDropdownId === journey.id ? (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setOpenDropdownId(null)} />
+            <div className="absolute right-0 mt-1 w-36 bg-white rounded-xl shadow-lg border border-slate-100 z-20 py-1 overflow-hidden">
+              <button onClick={() => handleEditJourney(journey)} className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                Edit
+              </button>
+              <button onClick={() => { setDeleteJourneyId(journey.id); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors">
+                Delete
+              </button>
+            </div>
+          </>
+        ) : null}
+      </div>
+    ) : null;
+
+    const notice = closed && !hasStartQtyArchive ? (
+      <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs font-medium text-amber-900 shadow-2xs">
+        Start quantities were not saved for this journey before transfer. Only quantities entered on the start page are
+        shown here — not transfer or final point data. Create a new journey after the database update to archive start
+        entries automatically.
+      </p>
+    ) : null;
+
+    return (
+      <JourneySummaryCard
+        key={journey.id}
+        journey={cardJourney}
+        expanded={expanded}
+        onToggleExpanded={() =>
+          setExpandedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(journey.id)) next.delete(journey.id);
+            else next.add(journey.id);
+            return next;
+          })
+        }
+        statusBadge={statusBadge}
+        optionsMenu={optionsMenu}
+        truckRows={truckRows}
+        odometerScope="start"
+        odometerLabel="Start odometer"
+        expandedSectionTitle="Starting Point — Full Details"
+        notice={notice}
+      />
     );
   };
 
@@ -768,7 +651,7 @@ export function StartPointForm({
               </label>
 
               <label className="block space-y-1 sm:space-y-1.5 group">
-                <span className="label text-xs sm:text-[0.8125rem] transition-colors group-focus-within:text-purple-600">to District</span>
+                <span className="label text-xs sm:text-[0.8125rem] transition-colors group-focus-within:text-purple-600">To District</span>
                 <div className="transition-all duration-300 group-focus-within:shadow-[0_0_0_3px_rgba(168,85,247,0.1)] rounded-xl">
                   <SelectField 
                      name="journey_district"
@@ -961,7 +844,12 @@ export function StartPointForm({
                         </svg>
                       )}
                       <span className={`text-sm font-semibold truncate ${hasOdometerCapture(truck) ? 'text-green-700' : 'text-amber-600'}`}>
-                        {truck.photoName ?? (truck.existingOdometerImagePath ? "Photo on file" : "Open Camera")}
+                        {formatOdometerDisplayLabel({
+                          photoName: truck.photoName,
+                          existingPath: truck.existingOdometerImagePath,
+                          truckSegment: `PT${tIndex + 1}`,
+                          pointCode: "SP",
+                        }) ?? (truck.existingOdometerImagePath ? "Photo on file" : "Open Camera")}
                       </span>
                     </div>
                   </label>

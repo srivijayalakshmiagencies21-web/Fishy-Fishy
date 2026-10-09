@@ -47,20 +47,33 @@ if (!refMatch) {
 }
 
 const projectRef = refMatch[1];
-const dbUrl = `postgresql://postgres:${encodeURIComponent(dbPassword)}@db.${projectRef}.supabase.co:5432/postgres`;
+const candidateUrls = [
+  `postgresql://postgres.${projectRef}:${encodeURIComponent(dbPassword)}@aws-0-ap-south-1.pooler.supabase.com:6543/postgres`,
+  `postgresql://postgres:${encodeURIComponent(dbPassword)}@db.${projectRef}.supabase.co:5432/postgres`,
+  `postgresql://postgres.${projectRef}:${encodeURIComponent(dbPassword)}@aws-0-ap-south-1.pooler.supabase.com:5432/postgres`
+];
 
 const sql = "TRUNCATE TABLE public.journeys CASCADE;";
 
 console.log(`Wiping journey data on project ${projectRef}…`);
 
-const result = spawnSync(
-  "npx",
-  ["-y", "supabase", "db", "query", "--db-url", dbUrl, sql.trim()],
-  { cwd: root, stdio: "inherit", env: process.env },
-);
+let workingUrl = null;
+for (const dbUrl of candidateUrls) {
+  const result = spawnSync(
+    "npx",
+    ["-y", "supabase", "db", "query", "--db-url", dbUrl, sql.trim()],
+    { cwd: root, stdio: "inherit", env: process.env }
+  );
 
-if (result.status !== 0) {
-  process.exit(result.status ?? 1);
+  if (result.status === 0) {
+    workingUrl = dbUrl;
+    break;
+  }
+}
+
+if (!workingUrl) {
+  console.error("Failed to connect to database using direct or pooler connection.");
+  process.exit(1);
 }
 
 const count = spawnSync(
@@ -71,10 +84,10 @@ const count = spawnSync(
     "db",
     "query",
     "--db-url",
-    dbUrl,
-    "SELECT (SELECT count(*) FROM public.journeys) AS journeys, (SELECT count(*) FROM public.journey_trucks) AS trucks;",
+    workingUrl,
+    "SELECT (SELECT count(*) FROM public.journeys) AS journeys, (SELECT count(*) FROM public.journey_trucks) AS trucks, (SELECT count(*) FROM public.truck_items) AS items;",
   ],
-  { cwd: root, encoding: "utf8", env: process.env },
+  { cwd: root, encoding: "utf8", env: process.env }
 );
 
 if (count.stdout) console.log(count.stdout.trim());

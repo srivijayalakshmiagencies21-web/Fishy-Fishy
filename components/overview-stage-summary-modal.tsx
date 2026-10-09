@@ -43,7 +43,7 @@ export function OverviewStageSummaryModal({
   const config = overviewStageSummaryConfig(journey, open.stage);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-[6vh] sm:pt-[8vh]">
       <button
         type="button"
         className="absolute inset-0 bg-black/45 backdrop-blur-[1px]"
@@ -54,7 +54,7 @@ export function OverviewStageSummaryModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="overview-stage-summary-title"
-        className="relative z-10 flex max-h-[min(92vh,880px)] w-full max-w-3xl flex-col overflow-hidden rounded-xl shadow-2xl"
+        className="relative z-10 flex max-h-[min(88vh,880px)] w-full max-w-3xl flex-col overflow-hidden rounded-xl shadow-2xl"
       >
         <div className="flex shrink-0 items-center justify-between border-b border-line bg-white px-4 py-3">
           <p id="overview-stage-summary-title" className="text-sm font-semibold text-gray-800">
@@ -76,10 +76,9 @@ export function OverviewStageSummaryModal({
             journey={config.journey}
             truckRows={config.truckRows}
             detailMode={config.detailMode}
+            odometerScope={open.stage}
             odometerLabel={config.odometerLabel}
             expandedSectionTitle={config.expandedSectionTitle}
-            timestampLabel={config.timestampLabel}
-            timestampValue={config.timestampValue}
             expanded={expanded}
             onToggleExpanded={() => setExpanded((v) => !v)}
             statusBadge={

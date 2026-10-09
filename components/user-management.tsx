@@ -288,7 +288,8 @@ export function UserManagement({
             ) : visibleUsers.length === 0 ? (
               <p className="px-4 py-8 text-sm text-[var(--text-secondary)]">No users yet.</p>
             ) : (
-              <table className="data-table">
+              <div className="w-full overflow-x-auto">
+                <table className="data-table min-w-[640px]">
                 <thead>
                   <tr>
                     <th>User</th>
@@ -394,7 +395,8 @@ export function UserManagement({
                   ))}
                 </tbody>
               </table>
-            )}
+            </div>
+          )}
           </section>
         </div>
       ) : (

@@ -159,6 +159,7 @@ export function SelectField({
                       className={isSelected ? "is-selected flex items-center justify-between w-full text-left" : "flex items-center justify-between w-full text-left"}
                       onClick={(e) => {
                         e.preventDefault();
+                        e.stopPropagation();
                         if (multiple) {
                           const newMulti = isSelected 
                             ? selectedMulti.filter(v => v !== option.value)

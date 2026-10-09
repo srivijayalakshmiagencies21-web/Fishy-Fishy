@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { photoLabelFromStoragePath } from "@/lib/odometer-display";
+import { formatOdometerDisplayLabel, photoLabelFromStoragePath } from "@/lib/odometer-display";
 import { createClient } from "@/lib/supabase/client";
 
 const SIGNED_URL_TTL_SEC = 60 * 60;
@@ -29,17 +29,19 @@ export function OdometerSummaryDetail({
   reading,
   label = "Odometer",
   imagePath,
+  captureLabel: propCaptureLabel,
 }: {
   reading?: number | string | null;
   imagePath?: string | null;
   label?: string;
+  captureLabel?: string | null;
 }) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageFailed, setImageFailed] = useState(false);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const captureLabel = photoLabelFromStoragePath(imagePath);
+  const captureLabel = propCaptureLabel || imagePath;
 
   const fetchSignedUrl = useCallback(async () => {
     if (!imagePath || imageUrl || imageFailed) return imageUrl;
@@ -94,50 +96,30 @@ export function OdometerSummaryDetail({
 
   return (
     <>
-      <div className="mb-3 pl-5">
-        <p className="text-[0.65rem] font-bold uppercase tracking-widest text-gray-400">{label}</p>
-        {hasReading ? (
-          <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-600">
-            <span>
-              Reading{" "}
-              <span className="font-bold tabular-nums text-gray-900">{Number(reading).toLocaleString()} km</span>
-            </span>
-            {canOpenCapture ? (
-              <button
-                type="button"
-                onClick={openPreview}
-                disabled={loadingPreview}
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-blue-600 shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50 disabled:opacity-60"
-                title="View odometer capture"
-                aria-label={`View ${label} capture`}
-              >
-                <CaptureIcon className="h-4 w-4" />
-              </button>
-            ) : null}
-          </p>
-        ) : null}
-        {!hasReading && hasCapture ? (
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            {canOpenCapture ? (
-              <button
-                type="button"
-                onClick={openPreview}
-                disabled={loadingPreview}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-blue-600 shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50 disabled:opacity-60"
-              >
-                <CaptureIcon className="h-3.5 w-3.5" />
-                {loadingPreview ? "Loading…" : "View capture"}
-              </button>
-            ) : (
-              <p className="text-xs font-medium text-gray-600">
-                {captureLabel ?? "Saved capture"}
-                {imageFailed ? " (preview unavailable)" : null}
-              </p>
-            )}
-          </div>
-        ) : null}
-        {hasReading && hasCapture && imageFailed ? (
-          <p className="mt-1 text-xs text-gray-500">Capture on file (preview unavailable)</p>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {/* Label */}
+        <span className="shrink-0 text-[0.65rem] font-semibold uppercase text-amber-700/80">
+          {label}:
+        </span>
+
+        {/* Reading */}
+        <span className="font-mono font-extrabold text-amber-950 text-xs shrink-0">
+          {hasReading ? `${Number(reading).toLocaleString()} km` : "—"}
+        </span>
+
+        {/* Capture pill */}
+        {canOpenCapture ? (
+          <button
+            type="button"
+            onClick={openPreview}
+            disabled={loadingPreview}
+            className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-200/80 bg-amber-50/90 px-2 py-0.5 text-[0.68rem] font-mono font-bold text-amber-700 shadow-2xs transition-colors hover:border-amber-300 hover:bg-amber-100 disabled:opacity-60"
+            title="View odometer capture"
+            aria-label={`View ${label} capture`}
+          >
+            <CaptureIcon className="h-3 w-3 shrink-0 text-amber-600" />
+            <span className="max-w-[120px] truncate">{captureLabel ?? "Capture"}</span>
+          </button>
         ) : null}
       </div>
 

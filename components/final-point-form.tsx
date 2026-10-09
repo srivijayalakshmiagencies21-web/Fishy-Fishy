@@ -1,11 +1,22 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useId, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
+import {
+  useActionState,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type ReactNode,
+  type UIEvent,
+} from "react";
 import { createPortal } from "react-dom";
 import { recordUnload, startFinalUnload } from "@/app/(workspace)/final/actions";
 import { compressOdometerPhotoClient } from "@/lib/odometer-image-compress.client";
 import { formDataFile } from "@/lib/odometer-image";
+import { formatOdometerDisplayLabel } from "@/lib/odometer-display";
 import { QuantityInput } from "@/components/quantity-input";
 import { JourneySummaryCard } from "@/components/journey-summary-card";
 import { SelectField } from "@/components/select-field";
@@ -21,7 +32,6 @@ import {
 } from "@/lib/journey-final-unload-summary";
 import { finalUnloadTruckLabel, sortJourneyTrucks } from "@/lib/journey-truck-labels";
 import { JourneyPhase, normalizeJourneyPhase } from "@/lib/journey-phase";
-import { hasPersistedTransferRecording } from "@/lib/journey-transfer-recording";
 import { journeyPointBadgeLabel, splitJourneysByPointLane } from "@/lib/journey-point-lanes";
 import {
   JourneyPointLaneSection,
@@ -407,6 +417,10 @@ function CameraCapture({
   label,
   required = true,
   photoName = null,
+  existingOdometerImagePath,
+  journeyNumber,
+  truckSegment,
+  pointCode,
   onName,
   onFile,
 }: {
@@ -414,11 +428,22 @@ function CameraCapture({
   label: string;
   required?: boolean;
   photoName?: string | null;
+  existingOdometerImagePath?: string | null;
+  journeyNumber?: number | string | null;
+  truckSegment?: string | null;
+  pointCode?: "SP" | "TP" | "FP" | null;
   onName?: (name: string | null) => void;
   onFile?: (file: File | null) => void;
 }) {
   const [compressing, setCompressing] = useState(false);
-  const captured = Boolean(photoName);
+  const captured = Boolean(photoName || existingOdometerImagePath);
+  const displayLabel = formatOdometerDisplayLabel({
+    photoName,
+    existingPath: existingOdometerImagePath,
+    journeyNumber,
+    truckSegment,
+    pointCode,
+  });
 
   return (
     <div className={`${FIELD_CELL} group`}>
@@ -476,7 +501,7 @@ function CameraCapture({
           </svg>
         )}
         <span className={`truncate text-sm font-semibold ${compressing ? "text-blue-600" : captured ? "text-green-700" : "text-amber-600"}`}>
-          {compressing ? "Processing photo…" : (photoName ?? "Open Camera")}
+          {compressing ? "Processing photo…" : (displayLabel ?? "Open Camera")}
         </span>
       </div>
     </div>
@@ -695,7 +720,7 @@ function UnloadTruckCard({
                       </span>
                       <div className="rounded-xl transition-all duration-300 group-focus-within/select:shadow-[0_0_0_3px_rgba(225,29,72,0.1)]">
                         <SelectField
-                          key={`lines-${drop.id}-${drop.lines.map((line) => line.itemKey).join(",")}`}
+                          key={`lines-${drop.id}`}
                           multiple
                           showCountOnly
                           valueMultiple={drop.lines.map((line) => line.itemKey)}
@@ -820,6 +845,10 @@ function UnloadTruckCard({
                 name={`unload_image_${truck.id}`}
                 label="Odometer capture"
                 photoName={truckUnload.photoName}
+                existingOdometerImagePath={truckUnload.existingOdometerImagePath}
+                journeyNumber={journey.db_id ?? 1}
+                truckSegment={truckLabel.odometerTruckSegment}
+                pointCode="FP"
                 onName={(name) => onChange({ ...truckUnload, photoName: name })}
                 onFile={(file) => {
                   registerOdometerFile(`unload_image_${truck.id}`, file);
@@ -863,19 +892,38 @@ function UnloadTrucksCarousel({
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (active >= trucks.length && trucks.length > 0) {
-      setActive(trucks.length - 1);
-    }
-  }, [active, trucks.length]);
+    setActive((index) => Math.min(index, Math.max(0, trucks.length - 1)));
+  }, [trucks.length]);
 
-  const scroll = (dir: "left" | "right") => {
-    if (!containerRef.current) return;
-    const amount = containerRef.current.clientWidth;
-    containerRef.current.scrollBy({ left: dir === "left" ? -amount : amount, behavior: "smooth" });
+  const scrollToSlide = (index: number, behavior: ScrollBehavior = "smooth") => {
+    const container = containerRef.current;
+    if (!container) return;
+    const card = container.children[index] as HTMLElement | undefined;
+    if (!card) return;
+    container.scrollTo({ left: card.offsetLeft, behavior });
+    setActive(index);
   };
 
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const index = Math.round(e.currentTarget.scrollLeft / e.currentTarget.clientWidth);
+  const scrollSlide = (dir: "left" | "right") => {
+    const nextIndex = dir === "left" ? active - 1 : active + 1;
+    if (nextIndex < 0 || nextIndex >= trucks.length) return;
+    scrollToSlide(nextIndex);
+  };
+
+  const handleCarouselScroll = (event: UIEvent<HTMLDivElement>) => {
+    const container = event.currentTarget;
+    const cards = Array.from(container.children) as HTMLElement[];
+    if (cards.length === 0) return;
+    const scrollLeft = container.scrollLeft;
+    let index = 0;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < cards.length; i++) {
+      const distance = Math.abs(cards[i]!.offsetLeft - scrollLeft);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        index = i;
+      }
+    }
     if (index !== active) setActive(index);
   };
 
@@ -883,55 +931,50 @@ function UnloadTrucksCarousel({
 
   return (
     <div className="group/carousel relative space-y-4">
-      <div className="flex items-center justify-between px-1 sm:px-2">
-        <div className="w-8" />
-        <div className="flex min-w-0 items-center justify-center">
-          {trucks.length > 1 ? (
+      <div className="flex items-center justify-between px-2 sm:px-4">
+        <div className="w-8" aria-hidden />
+        
+        <div className="flex items-center justify-center">
+          {trucks.length > 1 && (
             <button
               type="button"
-              onClick={() => scroll("left")}
+              onClick={() => scrollSlide("left")}
               disabled={active === 0}
-              className="rounded-full border border-gray-200 bg-white p-1.5 text-gray-500 shadow-sm transition-all hover:border-blue-200 hover:text-blue-600 disabled:opacity-30"
+              className="p-1.5 rounded-full bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 shadow-sm transition-all disabled:opacity-30 disabled:hover:border-gray-200 disabled:hover:text-gray-500"
+              aria-label="Previous truck"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-4 w-4">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 sm:h-4.5 sm:w-4.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
             </button>
-          ) : null}
-          <div className="mx-4 min-w-0 text-center">
-            <h3 className="text-sm font-bold uppercase tracking-widest text-gray-500">
-              Final Point Trucks{" "}
-              {trucks.length > 1 ? (
-                <span className="font-medium text-gray-400">
-                  ({active + 1}/{trucks.length})
-                </span>
-              ) : null}
-            </h3>
-          </div>
-          {trucks.length > 1 ? (
+          )}
+          
+          <h3 className="text-sm font-bold uppercase tracking-widest text-gray-500 mx-4">
+            Final Point Trucks {trucks.length > 1 && <span className="text-gray-400 font-medium">({active + 1}/{trucks.length})</span>}
+          </h3>
+
+          {trucks.length > 1 && (
             <button
               type="button"
-              onClick={() => scroll("right")}
+              onClick={() => scrollSlide("right")}
               disabled={active === trucks.length - 1}
-              className="rounded-full border border-gray-200 bg-white p-1.5 text-gray-500 shadow-sm transition-all hover:border-blue-200 hover:text-blue-600 disabled:opacity-30"
+              className="p-1.5 rounded-full bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 shadow-sm transition-all disabled:opacity-30 disabled:hover:border-gray-200 disabled:hover:text-gray-500"
+              aria-label="Next truck"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-4 w-4">
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 sm:h-4.5 sm:w-4.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
             </button>
-          ) : null}
+          )}
         </div>
         <div className="w-8" />
       </div>
 
       <div
         ref={containerRef}
-        onScroll={handleScroll}
-        className="flex w-full snap-x snap-mandatory gap-4 overflow-x-auto pb-2"
+        onScroll={handleCarouselScroll}
+        className="flex w-full gap-4 overflow-x-auto snap-x snap-mandatory hide-scrollbar pb-4"
       >
-        {trucks.map((truck) =>
-          truck.id ? (
-            <div key={truck.id} className="w-full min-w-full flex-none snap-center">
+        {trucks.map((truck) => {
+          if (!truck.id) return null;
+          return (
+            <div key={truck.id} className="w-full min-w-full flex-[0_0_100%] snap-center">
               <UnloadTruckCard
                 journey={journey}
                 truck={truck}
@@ -946,8 +989,8 @@ function UnloadTrucksCarousel({
                 registerOdometerFile={registerOdometerFile}
               />
             </div>
-          ) : null,
-        )}
+          );
+        })}
       </div>
     </div>
   );
@@ -1051,7 +1094,7 @@ function UnloadJourneyForm({
   return (
     <form
       encType="multipart/form-data"
-      className="space-y-5 p-5"
+      className="space-y-5"
       onSubmit={(event) => {
         event.preventDefault();
         setClientError(null);
@@ -1244,16 +1287,14 @@ export function FinalPointForm({
             </p>
           </div>
         </div>
-        <section className="surface overflow-hidden">
-          <UnloadJourneyForm
-            journey={recordingJourney}
-            draft={draft}
-            districts={districts}
-            onDraftChange={(next) => setDrafts((prev) => ({ ...prev, [recordingJourney.id]: next }))}
-            onCancel={closeUnload}
-            onSubmitSuccess={() => clearDraft(recordingJourney.id)}
-          />
-        </section>
+        <UnloadJourneyForm
+          journey={recordingJourney}
+          draft={draft}
+          districts={districts}
+          onDraftChange={(next) => setDrafts((prev) => ({ ...prev, [recordingJourney.id]: next }))}
+          onCancel={closeUnload}
+          onSubmitSuccess={() => clearDraft(recordingJourney.id)}
+        />
       </div>
     );
   }
@@ -1261,7 +1302,6 @@ export function FinalPointForm({
   const renderFinalJourneyCard = (journey: JourneySummary, closed: boolean) => {
     const unloading = unloadInProgress(journey, drafts[journey.id]);
     const unloadSubmitted = journeyUnloadSubmitted(journey);
-    const hasRecordedTransfer = hasPersistedTransferRecording(journey);
     const finalTrucks = trucksForFinalUnload(journey.trucks);
     return (
       <JourneySummaryCard
@@ -1269,22 +1309,9 @@ export function FinalPointForm({
         journey={{ ...journey, trucks: finalTrucks }}
         truckRows={unloadSubmitted ? buildFinalUnloadSummaryRows(journey) : undefined}
         detailMode={unloadSubmitted ? "unload_drops" : "items"}
-        odometerLabel={unloadSubmitted ? "Final odometer" : "Transfer odometer"}
+        odometerScope="final"
+        odometerLabel="Final odometer"
         expandedSectionTitle={unloadSubmitted ? "Final unload — Full Details" : "Starting Point — Full Details"}
-        timestampLabel={
-          unloadSubmitted
-            ? "Completed on"
-            : hasRecordedTransfer
-              ? "Transferred on"
-              : "Submitted on"
-        }
-        timestampValue={
-          unloadSubmitted
-            ? (journey.finalTime ?? journey.transferTime ?? journey.startTime)
-            : hasRecordedTransfer
-              ? (journey.transferTime ?? journey.startTime)
-              : journey.startTime
-        }
         expanded={expandedIds.has(journey.id)}
         onToggleExpanded={() =>
           setExpandedIds((prev) => {

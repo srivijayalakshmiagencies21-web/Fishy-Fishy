@@ -170,19 +170,34 @@ function JourneyTrack({
           style={{ width: `${position}%` }}
         />
 
-        {stops.map((stop) => (
-          <button
-            key={stop.key}
-            type="button"
-            onClick={() => openStage(stop.key)}
-            className="absolute top-[41px] -translate-x-1/2 -translate-y-1/2 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-dark"
-            style={{ left: `${stop.position}%` }}
-            title={`View ${stop.title} summary`}
-            aria-label={`View ${stop.title} summary`}
-          >
-            <StopDot status={stop.status} />
-          </button>
-        ))}
+        {stops.map((stop) => {
+          const isDone = stop.status === "done";
+          if (isDone) {
+            return (
+              <button
+                key={stop.key}
+                type="button"
+                onClick={() => openStage(stop.key)}
+                className="absolute top-[41px] -translate-x-1/2 -translate-y-1/2 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-dark"
+                style={{ left: `${stop.position}%` }}
+                title={`View ${stop.title} summary`}
+                aria-label={`View ${stop.title} summary`}
+              >
+                <StopDot status={stop.status} />
+              </button>
+            );
+          }
+          return (
+            <div
+              key={stop.key}
+              className="absolute top-[41px] -translate-x-1/2 -translate-y-1/2 rounded-full cursor-not-allowed"
+              style={{ left: `${stop.position}%` }}
+              title={stop.status === "active" ? "In progress" : "Upcoming"}
+            >
+              <StopDot status={stop.status} />
+            </div>
+          );
+        })}
 
         {badgeCount > 0 ? (
           <div
@@ -195,16 +210,11 @@ function JourneyTrack({
         ) : null}
 
         {stops.map((stop) => {
+          const isDone = stop.status === "done";
           const trucksLabel = formatTrucks(stop.truckCount);
-          return (
-            <button
-              key={`${stop.key}-label`}
-              type="button"
-              onClick={() => openStage(stop.key)}
-              className="absolute top-[56px] max-w-[9rem] cursor-pointer rounded-md text-left transition-colors hover:bg-blue-soft/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-dark"
-              style={stopLabelStyle(stop.position)}
-              title={`View ${stop.title} summary`}
-            >
+          
+          const content = (
+            <>
               <p
                 className={`text-xs font-semibold ${
                   stop.status === "upcoming" ? "text-gray-400" : stop.status === "active" ? "text-blue-dark" : "text-gray-900"
@@ -215,10 +225,38 @@ function JourneyTrack({
               <p className="mt-0.5 truncate text-[11px] text-gray-500" title={stop.caption || undefined}>
                 {stop.caption || "—"}
               </p>
-              {trucksLabel ? (
+              {isDone && trucksLabel ? (
                 <p className="mt-0.5 text-[10px] font-medium tabular-nums text-gray-400">{trucksLabel}</p>
               ) : null}
-            </button>
+              {stop.status === "active" ? (
+                <p className="mt-0.5 text-[10px] font-semibold text-blue-500 uppercase tracking-wide">In progress</p>
+              ) : null}
+            </>
+          );
+
+          if (isDone) {
+            return (
+              <button
+                key={`${stop.key}-label`}
+                type="button"
+                onClick={() => openStage(stop.key)}
+                className="absolute top-[56px] max-w-[9rem] cursor-pointer rounded-md text-left transition-colors hover:bg-blue-soft/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-dark"
+                style={stopLabelStyle(stop.position)}
+                title={`View ${stop.title} summary`}
+              >
+                {content}
+              </button>
+            );
+          }
+
+          return (
+            <div
+              key={`${stop.key}-label`}
+              className="absolute top-[56px] max-w-[9rem] cursor-default text-left"
+              style={stopLabelStyle(stop.position)}
+            >
+              {content}
+            </div>
           );
         })}
       </div>

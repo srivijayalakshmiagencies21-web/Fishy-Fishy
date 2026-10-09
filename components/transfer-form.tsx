@@ -18,6 +18,7 @@ import {
 } from "@/app/(workspace)/transfer/actions";
 import { compressOdometerPhotoClient } from "@/lib/odometer-image-compress.client";
 import { formDataFile } from "@/lib/odometer-image";
+import { formatOdometerDisplayLabel } from "@/lib/odometer-display";
 import { JourneySummaryCard } from "@/components/journey-summary-card";
 import type { DistrictRow, FishRow, VendorRow } from "@/lib/masters";
 import type { JourneySummary } from "@/lib/journey-cards";
@@ -599,6 +600,7 @@ function FishQuantityRow({
 }
 
 function SecondaryTruckPanel({
+  journeyNumber,
   primaryNumber,
   secondary,
   secondaryIndex,
@@ -609,6 +611,7 @@ function SecondaryTruckPanel({
   onUpdateAllocation,
   registerOdometerFile,
 }: {
+  journeyNumber: number;
   primaryNumber: number;
   secondary: SecondaryTruck;
   secondaryIndex: number;
@@ -741,7 +744,12 @@ function SecondaryTruckPanel({
                           name={`odometer_image_${secondary.id}`}
                           label="Odometer capture"
                           photoName={secondary.photoName}
-                          required={!secondary.photoName}
+                          odometerReading={secondary.odometer_reading}
+                          existingOdometerImagePath={secondary.existingOdometerImagePath}
+                          required={!secondary.photoName && !secondary.existingOdometerImagePath}
+                          journeyNumber={journeyNumber}
+                          truckSegment={`ST${code}`}
+                          pointCode="TP"
                           onName={(name) => onUpdateSecondary({ photoName: name })}
                           onFile={(file) => registerOdometerFile(`odometer_image_${secondary.id}`, file)}
                         />
@@ -778,6 +786,7 @@ function SecondaryTruckPanel({
 }
 
 function TransferPrimaryStack({
+  journeyNumber,
   primaryNumber,
   truck,
   startTruck,
@@ -795,6 +804,7 @@ function TransferPrimaryStack({
   onUpdateAllocation,
   registerOdometerFile,
 }: {
+  journeyNumber: number;
   primaryNumber: number;
   truck: { id: string; end_type?: string };
   startTruck: { vehicle_number?: string; transporter?: { name?: string }; driver_name?: string; driver_phone?: string };
@@ -895,7 +905,7 @@ function TransferPrimaryStack({
   }, [secondaries.length]);
 
   return (
-    <div className="relative space-y-4">
+    <div className="relative group/carousel space-y-4">
       {primarySelect && primarySelect.options.length > 1 ? (
         <label className="flex items-center gap-3 px-2 sm:px-4">
           <span className="shrink-0 text-xs font-bold uppercase tracking-widest text-gray-500">Primary truck</span>
@@ -914,43 +924,35 @@ function TransferPrimaryStack({
 
       <div className="flex items-center justify-between px-2 sm:px-4">
         <div className="w-8" aria-hidden />
+        
         <div className="flex items-center justify-center">
-          {slideCount > 1 ? (
+          {slideCount > 1 && (
             <button
               type="button"
               onClick={() => scrollSlide("left")}
               disabled={activeSlide === 0}
-              className="rounded-full border border-gray-200 bg-white p-1.5 text-gray-500 shadow-sm transition-all hover:border-blue-200 hover:text-blue-600 disabled:opacity-30 disabled:hover:border-gray-200 disabled:hover:text-gray-500"
+              className="p-1.5 rounded-full bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 shadow-sm transition-all disabled:opacity-30 disabled:hover:border-gray-200 disabled:hover:text-gray-500"
               aria-label="Previous truck"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-4 w-4">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 sm:h-4.5 sm:w-4.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
             </button>
-          ) : null}
-
-          <h3 className="mx-4 text-sm font-bold uppercase tracking-widest text-gray-500">
-            Transfer Point Trucks{" "}
-            {slideCount > 1 ? (
-              <span className="font-medium text-gray-400">
-                ({activeSlide + 1}/{slideCount})
-              </span>
-            ) : null}
+          )}
+          
+          <h3 className="text-sm font-bold uppercase tracking-widest text-gray-500 mx-4">
+            Transfer Point Trucks {slideCount > 1 && <span className="text-gray-400 font-medium">({activeSlide + 1}/{slideCount})</span>}
           </h3>
 
-          {slideCount > 1 ? (
+          {slideCount > 1 && (
             <button
               type="button"
               onClick={() => scrollSlide("right")}
               disabled={activeSlide === slideCount - 1}
-              className="rounded-full border border-gray-200 bg-white p-1.5 text-gray-500 shadow-sm transition-all hover:border-blue-200 hover:text-blue-600 disabled:opacity-30 disabled:hover:border-gray-200 disabled:hover:text-gray-500"
+              className="p-1.5 rounded-full bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 shadow-sm transition-all disabled:opacity-30 disabled:hover:border-gray-200 disabled:hover:text-gray-500"
               aria-label="Next truck"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-4 w-4">
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 sm:h-4.5 sm:w-4.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
             </button>
-          ) : null}
+          )}
         </div>
 
         <div className="flex w-8 justify-end">
@@ -973,10 +975,10 @@ function TransferPrimaryStack({
       <div
         ref={containerRef}
         onScroll={handleCarouselScroll}
-        className="hide-scrollbar flex w-full snap-x snap-mandatory gap-4 overflow-x-auto pb-4"
+        className="flex w-full gap-4 overflow-x-auto snap-x snap-mandatory hide-scrollbar pb-4"
       >
         <div key={`primary-${truck.id}`} className="w-full min-w-full flex-[0_0_100%] snap-center">
-          <section className="relative overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm sm:rounded-2xl">
+          <section className="relative overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm transition-all duration-500 animate-in slide-in-from-bottom-8 fade-in sm:rounded-2xl">
             <div className="relative flex items-center gap-2 border-b border-gray-100 bg-gradient-to-r from-gray-50/80 to-white px-4 py-3 sm:gap-3 sm:px-5">
               <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-500 to-blue-300" />
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 sm:ml-2 sm:h-8 sm:w-8">
@@ -1001,6 +1003,8 @@ function TransferPrimaryStack({
 
             <div className="space-y-6 p-4 sm:space-y-8 sm:p-5">
               <PrimaryTruckDetails
+                journeyNumber={journeyNumber}
+                primaryNumber={primaryNumber}
                 truck={startTruck}
                 truckId={truck.id}
                 arrival={arrival}
@@ -1052,6 +1056,7 @@ function TransferPrimaryStack({
         {secondaries.map((secondary, secIndex) => (
           <div key={secondary.id} className="w-full min-w-full flex-[0_0_100%] snap-center">
             <SecondaryTruckPanel
+              journeyNumber={journeyNumber}
               primaryNumber={primaryNumber}
               secondary={secondary}
               secondaryIndex={secIndex}
@@ -1084,15 +1089,19 @@ function ReadOnlyField({ label, value, className }: { label: string; value: stri
 }
 
 function PrimaryTruckDetails({
+  journeyNumber,
+  primaryNumber,
   truck,
   truckId,
   arrival,
   onArrivalChange,
   registerOdometerFile,
 }: {
+  journeyNumber: number;
+  primaryNumber: number;
   truck: any;
   truckId: string;
-  arrival: { odometer_reading: number | ""; photoName: string | null };
+  arrival: { odometer_reading: number | ""; photoName: string | null; existingOdometerImagePath?: string | null };
   onArrivalChange: (field: "odometer_reading" | "photoName", value: unknown) => void;
   registerOdometerFile: (fieldName: string, file: File | null) => void;
 }) {
@@ -1130,7 +1139,12 @@ function PrimaryTruckDetails({
           name={`arrival_image_${truckId}`}
           label="Odometer capture"
           photoName={arrival.photoName}
-          required={!arrival.photoName}
+          odometerReading={arrival.odometer_reading}
+          existingOdometerImagePath={arrival.existingOdometerImagePath}
+          required={!arrival.photoName && !arrival.existingOdometerImagePath}
+          journeyNumber={journeyNumber}
+          truckSegment={`PT${primaryNumber}`}
+          pointCode="TP"
           onName={(name) => onArrivalChange("photoName", name)}
           onFile={(file) => registerOdometerFile(`arrival_image_${truckId}`, file)}
         />
@@ -1144,6 +1158,12 @@ function CameraCapture({
   label,
   required = true,
   photoName = null,
+  odometerReading,
+  existingOdometerImagePath,
+  journeyNumber,
+  truckSegment,
+  vehicleNumber,
+  pointCode,
   onName,
   onFile,
 }: {
@@ -1151,11 +1171,24 @@ function CameraCapture({
   label: string;
   required?: boolean;
   photoName?: string | null;
+  odometerReading?: number | string | "";
+  existingOdometerImagePath?: string | null;
+  journeyNumber?: number | string | null;
+  truckSegment?: string | null;
+  vehicleNumber?: string | null;
+  pointCode?: "SP" | "TP" | "FP" | null;
   onName?: (name: string | null) => void;
   onFile?: (file: File | null) => void;
 }) {
   const [compressing, setCompressing] = useState(false);
-  const captured = Boolean(photoName);
+  const captured = Boolean(photoName || existingOdometerImagePath);
+  const displayLabel = formatOdometerDisplayLabel({
+    photoName,
+    existingPath: existingOdometerImagePath,
+    journeyNumber,
+    truckSegment,
+    pointCode,
+  });
 
   return (
     <div className={`${FIELD_CELL} group`}>
@@ -1213,7 +1246,7 @@ function CameraCapture({
           </svg>
         )}
         <span className={`truncate text-sm font-semibold ${compressing ? "text-blue-600" : captured ? "text-green-700" : "text-amber-600"}`}>
-          {compressing ? "Processing photo…" : (photoName ?? "Open Camera")}
+          {compressing ? "Processing photo…" : (displayLabel ?? "Open Camera")}
         </span>
       </div>
     </div>
@@ -1440,7 +1473,7 @@ function TransferJourneyForm({
   return (
     <form
       encType="multipart/form-data"
-      className="space-y-5 p-5"
+      className="space-y-5"
       onSubmit={(event) => {
         event.preventDefault();
         setSubmitError(null);
@@ -1515,6 +1548,7 @@ function TransferJourneyForm({
           {activePrimaryEntry ? (
             <TransferPrimaryStack
               key={activePrimaryEntry.truck.id}
+              journeyNumber={journey.db_id ?? 1}
               primaryNumber={activePrimaryEntry.primaryNumber}
               truck={activePrimaryEntry.truck}
               startTruck={startTruckAt(journey, activePrimaryEntry.truck.id) ?? activePrimaryEntry.truck}
@@ -1755,31 +1789,29 @@ export function TransferPointForm({
           </div>
         </div>
 
-        <section className="surface overflow-hidden">
-          <TransferJourneyForm
-            journey={recordingJourney}
-            draft={draft}
-            primaryLines={primaryLines}
-            onDraftChange={(next) =>
-              setDrafts((prev) => ({
-                ...prev,
-                [recordingJourney.id]: {
-                  ...next,
-                  inventoryLines:
-                    primaryLines.length > 0 ? primaryLines : next.inventoryLines ?? prev[recordingJourney.id]?.inventoryLines,
-                },
-              }))
-            }
-            transporters={transporters}
-            onCancel={closeRecording}
-            onSubmitSuccess={() => {
-              setLinesByJourney((prev) => ({
-                ...prev,
-                [recordingJourney.id]: primaryLines,
-              }));
-            }}
-          />
-        </section>
+        <TransferJourneyForm
+          journey={recordingJourney}
+          draft={draft}
+          primaryLines={primaryLines}
+          onDraftChange={(next) =>
+            setDrafts((prev) => ({
+              ...prev,
+              [recordingJourney.id]: {
+                ...next,
+                inventoryLines:
+                  primaryLines.length > 0 ? primaryLines : next.inventoryLines ?? prev[recordingJourney.id]?.inventoryLines,
+              },
+            }))
+          }
+          transporters={transporters}
+          onCancel={closeRecording}
+          onSubmitSuccess={() => {
+            setLinesByJourney((prev) => ({
+              ...prev,
+              [recordingJourney.id]: primaryLines,
+            }));
+          }}
+        />
       </div>
     );
   }
@@ -1796,10 +1828,9 @@ export function TransferPointForm({
         key={journey.id}
         journey={journey}
         truckRows={hasRecordedTransfer ? buildTransferSummaryRows(journey) : undefined}
-        odometerLabel={hasRecordedTransfer ? "Transfer odometer" : "Start odometer"}
+        odometerScope="transfer"
+        odometerLabel="Transfer odometer"
         expandedSectionTitle={hasRecordedTransfer ? "Transfer — Full Details" : undefined}
-        timestampLabel={hasRecordedTransfer ? "Transferred on" : "Submitted on"}
-        timestampValue={hasRecordedTransfer ? (journey.transferTime ?? journey.startTime) : journey.startTime}
         expanded={expandedIds.has(journey.id)}
         onToggleExpanded={() =>
           setExpandedIds((prev) => {

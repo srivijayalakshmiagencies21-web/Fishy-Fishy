@@ -20,8 +20,6 @@ export type OverviewStageSummaryConfig = {
   expandedSectionTitle: string;
   statusBadgeLabel: string;
   stageTitle: string;
-  timestampLabel: string;
-  timestampValue: string | null;
 };
 
 function mapStartItemsToCardItems(
@@ -74,8 +72,6 @@ export function overviewStageSummaryConfig(
       expandedSectionTitle: "Starting Point — Full Details",
       statusBadgeLabel: journeyPointBadgeLabel("start", journey.phase),
       stageTitle: "Start",
-      timestampLabel: "Submitted on",
-      timestampValue: journey.startTime,
     };
   }
 
@@ -89,13 +85,10 @@ export function overviewStageSummaryConfig(
       expandedSectionTitle: hasRecorded ? "Transfer — Full Details" : "Starting Point — Full Details",
       statusBadgeLabel: journeyPointBadgeLabel("transfer", journey.phase),
       stageTitle: "Transfer",
-      timestampLabel: hasRecorded ? "Transferred on" : "Submitted on",
-      timestampValue: hasRecorded ? (journey.transferTime ?? journey.startTime) : journey.startTime,
     };
   }
 
   const unloadSubmitted = journeyUnloadSubmitted(journey);
-  const hasRecorded = hasPersistedTransferRecording(journey);
   const finalTrucks = trucksForFinalUnload(journey.trucks);
   return {
     journey: { ...journey, trucks: finalTrucks },
@@ -107,15 +100,5 @@ export function overviewStageSummaryConfig(
     expandedSectionTitle: unloadSubmitted ? "Final unload — Full Details" : "Starting Point — Full Details",
     statusBadgeLabel: journeyPointBadgeLabel("final", journey.phase),
     stageTitle: "Final",
-    timestampLabel: unloadSubmitted
-      ? "Completed on"
-      : hasRecorded
-        ? "Transferred on"
-        : "Submitted on",
-    timestampValue: unloadSubmitted
-      ? (journey.finalTime ?? journey.transferTime ?? journey.startTime)
-      : hasRecorded
-        ? (journey.transferTime ?? journey.startTime)
-        : journey.startTime,
   };
 }
