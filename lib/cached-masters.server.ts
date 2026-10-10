@@ -10,7 +10,7 @@ export async function loadMasterCached(slug: string): Promise<MasterData> {
   const supabase = await createClient();
   return unstable_cache(
     async () => loadMasterWithClient(supabase, slug),
-    [`master-data-v1-${slug}`],
+    [`master-data-v6-${slug}`],
     {
       revalidate: MASTER_REVALIDATE_SEC,
       tags: [`master:${slug}`],

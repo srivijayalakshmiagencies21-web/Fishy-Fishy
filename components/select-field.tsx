@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 export type SelectOption = {
@@ -41,6 +41,7 @@ export function SelectField({
   showCountOnly = false,
   disabled = false,
   autoSelectWhenSingle = true,
+  searchable = false,
 }: {
   name?: string;
   options: SelectOption[];
@@ -59,8 +60,11 @@ export function SelectField({
   disabled?: boolean;
   /** When true, the sole option is selected automatically; with 2+ options the user must choose. */
   autoSelectWhenSingle?: boolean;
+  /** Type in the trigger field to filter options (no extra search row in the menu). */
+  searchable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const isControlled = controlledValue !== undefined;
   const [internalValue, setInternalValue] = useState(() => {
     if (defaultValue) return defaultValue;
@@ -72,9 +76,15 @@ export function SelectField({
     !multiple && autoSelectWhenSingle && options.length === 1 ? options[0] : null;
   const fieldValue = value || soleOption?.value || "";
   const [selectedMulti, setSelectedMulti] = useState<string[]>(valueMultiple);
-  const [box, setBox] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [box, setBox] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+  } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLUListElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const listId = useId();
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -84,6 +94,18 @@ export function SelectField({
   function commitSingle(next: string) {
     if (!isControlled) setInternalValue(next);
     onChangeRef.current?.(next);
+  }
+
+  function closeMenu() {
+    setOpen(false);
+    setSearchQuery("");
+  }
+
+  function openMenuForSearch(initialQuery = "") {
+    if (disabled) return;
+    setSearchQuery(initialQuery);
+    placeMenu();
+    setOpen(true);
   }
 
   // Keep internal multi state in sync if prop changes
@@ -127,10 +149,44 @@ export function SelectField({
   const selected = options.find((option) => option.value === fieldValue);
   const selectedMultiOptions = options.filter((o) => selectedMulti.includes(o.value));
 
+  const visibleOptions = useMemo(() => {
+    if (!searchable || !searchQuery.trim()) return options;
+    const q = searchQuery.trim().toLowerCase();
+    return options.filter((option) => option.label.toLowerCase().includes(q));
+  }, [options, searchable, searchQuery]);
+
+  const useInlineSearch = searchable && !multiple && !integrated;
+  const triggerDisplayValue = open ? searchQuery : (selected?.label ?? "");
+
   function placeMenu() {
     const rect = rootRef.current?.getBoundingClientRect();
     if (!rect) return;
-    setBox({ top: rect.bottom + 6, left: rect.left, width: rect.width });
+
+    const gap = 6;
+    const viewportPad = 8;
+    const preferredMax = 240;
+    const spaceBelow = window.innerHeight - rect.bottom - gap - viewportPad;
+    const spaceAbove = rect.top - gap - viewportPad;
+    const openUpward = spaceBelow < 160 && spaceAbove > spaceBelow;
+
+    if (openUpward) {
+      const maxHeight = Math.min(preferredMax, Math.max(80, spaceAbove));
+      setBox({
+        top: rect.top - gap - maxHeight,
+        left: rect.left,
+        width: rect.width,
+        maxHeight,
+      });
+      return;
+    }
+
+    const maxHeight = Math.min(preferredMax, Math.max(80, spaceBelow));
+    setBox({
+      top: rect.bottom + gap,
+      left: rect.left,
+      width: rect.width,
+      maxHeight,
+    });
   }
 
   useEffect(() => {
@@ -139,11 +195,11 @@ export function SelectField({
     function onPointerDown(event: MouseEvent) {
       const target = event.target as Node;
       if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
-      setOpen(false);
+      closeMenu();
     }
 
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") closeMenu();
     }
 
     placeMenu();
@@ -158,6 +214,15 @@ export function SelectField({
       window.removeEventListener("scroll", placeMenu, true);
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !useInlineSearch) return;
+    const frame = requestAnimationFrame(() => {
+      const input = searchInputRef.current;
+      input?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open, useInlineSearch]);
 
   const rootClass = [
     "select-field",
@@ -182,85 +247,156 @@ export function SelectField({
       {!multiple && name && (
         <input type="hidden" name={name} value={fieldValue} required={required} />
       )}
-      <button
-        type="button"
-        disabled={disabled}
-        className={triggerClass}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={listId}
-        onClick={() => {
-          if (disabled) return;
-          if (open) {
-            setOpen(false);
-            return;
-          }
-          placeMenu();
-          setOpen(true);
-        }}
-      >
-        <span className={`flex min-w-0 items-center ${integrated ? "shrink" : "flex-1"}`}>
-          {!multiple ? (
-            selected ? (
-              <SelectOptionContent option={selected} />
+      {useInlineSearch ? (
+        <div
+          className={`${triggerClass} select-field-trigger-combobox`}
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={listId}
+          aria-haspopup="listbox"
+        >
+          <input
+            ref={searchInputRef}
+            type="text"
+            disabled={disabled}
+            autoComplete="off"
+            className="select-field-combobox-input"
+            value={triggerDisplayValue}
+            placeholder={placeholder}
+            aria-autocomplete="list"
+            onChange={(event) => {
+              setSearchQuery(event.target.value);
+              if (!open) {
+                placeMenu();
+                setOpen(true);
+              }
+            }}
+            onClick={() => {
+              if (disabled || open) return;
+              openMenuForSearch("");
+            }}
+            onFocus={() => {
+              if (disabled || open) return;
+              openMenuForSearch("");
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") closeMenu();
+            }}
+          />
+          <button
+            type="button"
+            tabIndex={-1}
+            disabled={disabled}
+            className="select-field-combobox-chevron"
+            aria-label={open ? "Close list" : "Open list"}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              if (disabled) return;
+              if (open) closeMenu();
+              else openMenuForSearch("");
+            }}
+          >
+            <Chevron open={open} />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          disabled={disabled}
+          className={triggerClass}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-controls={listId}
+          onClick={() => {
+            if (disabled) return;
+            if (open) {
+              closeMenu();
+              return;
+            }
+            placeMenu();
+            setOpen(true);
+          }}
+        >
+          <span className={`flex min-w-0 items-center ${integrated ? "shrink" : "flex-1"}`}>
+            {!multiple ? (
+              selected ? (
+                <SelectOptionContent option={selected} />
+              ) : (
+                <span className="truncate text-muted">{placeholder}</span>
+              )
+            ) : selectedMultiOptions.length > 0 ? (
+              <span className="truncate text-sm">
+                {showCountOnly
+                  ? `${selectedMultiOptions.length} selected`
+                  : selectedMultiOptions.map((o) => o.label).join(", ")}
+              </span>
             ) : (
               <span className="truncate text-muted">{placeholder}</span>
-            )
-          ) : selectedMultiOptions.length > 0 ? (
-            <span className="truncate text-sm">
-              {showCountOnly
-                ? `${selectedMultiOptions.length} selected`
-                : selectedMultiOptions.map((o) => o.label).join(", ")}
-            </span>
-          ) : (
-            <span className="truncate text-muted">{placeholder}</span>
-          )}
-        </span>
-        <Chevron open={open} />
-      </button>
+            )}
+          </span>
+          <Chevron open={open} />
+        </button>
+      )}
       {open && box
         ? createPortal(
-            <ul
+            <div
               ref={menuRef}
-              className="select-field-menu is-fixed max-h-60 overflow-auto"
-              id={listId}
-              role="listbox"
-              aria-multiselectable={multiple}
-              style={{ top: box.top, left: box.left, width: box.width }}
+              className="select-field-menu is-fixed"
+              style={{
+                top: box.top,
+                left: box.left,
+                width: box.width,
+                maxHeight: box.maxHeight,
+              }}
             >
-              {options.map((option) => {
-                const isSelected = multiple
-                  ? selectedMulti.includes(option.value)
-                  : option.value === fieldValue;
-                return (
-                  <li key={option.value}>
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={isSelected}
-                      className={isSelected ? "is-selected flex items-center justify-between w-full text-left" : "flex items-center justify-between w-full text-left"}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (multiple) {
-                          const newMulti = isSelected 
-                            ? selectedMulti.filter(v => v !== option.value)
-                            : [...selectedMulti, option.value];
-                          setSelectedMulti(newMulti);
-                          onChangeMultiple?.(newMulti);
-                        } else {
-                          commitSingle(option.value);
-                          setOpen(false);
-                        }
-                      }}
-                    >
-                      <SelectOptionContent option={option} />
-                      {isSelected ? <CheckIcon /> : null}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>,
+              <ul
+                className="max-h-60 overflow-auto"
+                id={listId}
+                role="listbox"
+                aria-multiselectable={multiple}
+              >
+                {searchable && visibleOptions.length === 0 ? (
+                  <li className="select-field-empty px-3 py-2 text-sm text-muted">No matches</li>
+                ) : (
+                  (searchable ? visibleOptions : options).map((option) => {
+                    const isSelected = multiple
+                      ? selectedMulti.includes(option.value)
+                      : option.value === fieldValue;
+                    return (
+                      <li key={option.value}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={isSelected}
+                          className={
+                            isSelected
+                              ? "is-selected flex w-full items-center justify-between text-left"
+                              : "flex w-full items-center justify-between text-left"
+                          }
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (multiple) {
+                              const newMulti = isSelected
+                                ? selectedMulti.filter((v) => v !== option.value)
+                                : [...selectedMulti, option.value];
+                              setSelectedMulti(newMulti);
+                              onChangeMultiple?.(newMulti);
+                            } else {
+                              commitSingle(option.value);
+                              closeMenu();
+                            }
+                          }}
+                        >
+                          <SelectOptionContent option={option} />
+                          {isSelected ? <CheckIcon /> : null}
+                        </button>
+                      </li>
+                    );
+                  })
+                )}
+              </ul>
+            </div>,
             document.body,
           )
         : null}

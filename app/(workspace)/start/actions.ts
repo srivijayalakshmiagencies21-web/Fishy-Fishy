@@ -150,7 +150,7 @@ export async function createJourney(state: unknown, formData: FormData) {
 
   revalidatePath("/transfer");
   revalidatePath("/start");
-  revalidatePath("/overview");
+  revalidatePath("/timeline");
   invalidateJourneyCaches();
   return { success: true };
   } catch (err) {
@@ -167,7 +167,7 @@ export async function deleteJourney(id: string) {
   }
   revalidatePath("/start");
   revalidatePath("/transfer");
-  revalidatePath("/overview");
+  revalidatePath("/timeline");
   invalidateJourneyCaches();
   return { success: true };
 }

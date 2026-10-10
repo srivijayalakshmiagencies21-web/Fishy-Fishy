@@ -1,5 +1,6 @@
 export type AppRole = "admin" | "manager" | "employee";
 export type VendorType = "Supplier" | "Transporter";
+export type TransporterScope = "Local" | "Non-Local";
 
 export type Database = {
   public: {
@@ -8,16 +9,28 @@ export type Database = {
         Row: {
           id: number;
           name: string;
+          account_type: string;
+          linked_user_id: string | null;
+          opening_balance: number;
+          opening_balance_date: string;
           created_at: string;
         };
         Insert: {
           id?: number;
           name: string;
+          account_type?: string;
+          linked_user_id?: string | null;
+          opening_balance?: number;
+          opening_balance_date?: string;
           created_at?: string;
         };
         Update: {
           id?: number;
           name?: string;
+          account_type?: string;
+          linked_user_id?: string | null;
+          opening_balance?: number;
+          opening_balance_date?: string;
           created_at?: string;
         };
         Relationships: [];
@@ -144,6 +157,7 @@ export type Database = {
           name: string;
           contact_number: string;
           vendor_type: VendorType;
+          transporter_scope: TransporterScope | null;
           created_at: string;
         };
         Insert: {
@@ -151,6 +165,7 @@ export type Database = {
           name: string;
           contact_number: string;
           vendor_type: VendorType;
+          transporter_scope?: TransporterScope | null;
           created_at?: string;
         };
         Update: {
@@ -158,6 +173,7 @@ export type Database = {
           name?: string;
           contact_number?: string;
           vendor_type?: VendorType;
+          transporter_scope?: TransporterScope | null;
           created_at?: string;
         };
         Relationships: [];
@@ -180,6 +196,21 @@ export type Database = {
           fish_type?: string;
           seed_size?: string;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      transaction_category_roles: {
+        Row: {
+          category_id: number;
+          role_id: string;
+        };
+        Insert: {
+          category_id: number;
+          role_id: string;
+        };
+        Update: {
+          category_id?: number;
+          role_id?: string;
         };
         Relationships: [];
       };
@@ -226,6 +257,7 @@ export type Database = {
           party: string;
           remarks: string;
           journey_id: string | null;
+          district_id: number | null;
           created_by: string | null;
           created_at: string;
         };
@@ -241,6 +273,7 @@ export type Database = {
           party?: string;
           remarks?: string;
           journey_id?: string | null;
+          district_id?: number | null;
           created_by?: string | null;
           created_at?: string;
         };
@@ -256,6 +289,7 @@ export type Database = {
           party?: string;
           remarks?: string;
           journey_id?: string | null;
+          district_id?: number | null;
           created_by?: string | null;
           created_at?: string;
         };
@@ -439,7 +473,15 @@ export type Database = {
           end_type?: string;
           created_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "journey_trucks_journey_id_fkey";
+            columns: ["journey_id"];
+            isOneToOne: false;
+            referencedRelation: "journeys";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       truck_items: {
         Row: {
@@ -570,6 +612,13 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      get_my_access: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          role: string;
+          pages: string[];
+        }[];
+      };
       get_my_pages: {
         Args: Record<PropertyKey, never>;
         Returns: string[];
@@ -577,6 +626,32 @@ export type Database = {
       get_my_role: {
         Args: Record<PropertyKey, never>;
         Returns: string;
+      };
+      get_my_role_id: {
+        Args: Record<PropertyKey, never>;
+        Returns: string;
+      };
+      finance_category_ids_for_me: {
+        Args: Record<PropertyKey, never>;
+        Returns: number[];
+      };
+      finance_categories_for_me: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          id: number;
+          name: string;
+          transaction_type: string;
+          cost_nature: string;
+          default_allocation: string;
+          active: boolean;
+        }[];
+      };
+      list_account_link_users: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          user_id: string;
+          username: string;
+        }[];
       };
       list_app_users: {
         Args: Record<PropertyKey, never>;
@@ -595,7 +670,11 @@ export type Database = {
         Returns: string;
       };
       update_role: {
-        Args: { p_role_id: string; p_name: string; p_allowed_pages: string[] };
+        Args: {
+          p_role_id: string;
+          p_name: string;
+          p_allowed_pages: string[];
+        };
         Returns: undefined;
       };
       delete_role: {

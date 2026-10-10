@@ -19,14 +19,21 @@ import {
   deleteVendor,
   tagCompany,
   unlinkCompany,
+  updateAccount,
   updateTransactionCategory,
 } from "@/app/(workspace)/masters/actions";
+import { DateField } from "@/components/date-field";
 import { SelectField } from "@/components/select-field";
+import { formatDisplayDate } from "@/lib/dates";
+import { formatAmount, todayIsoDate } from "@/lib/transactions";
 import type {
+  AccountRow,
   DistrictRow,
+  LinkUserOption,
   FishRow,
   MasterData,
   NamedRow,
+  RoleOption,
   TransactionCategoryRow,
   VendorRow,
 } from "@/lib/masters";
@@ -48,19 +55,69 @@ function transactionTypeLabel(value: TransactionCategoryRow["transaction_type"])
 }
 
 function allocationLabel(value: TransactionCategoryRow["default_allocation"]) {
-  if (value === "company") return "Company";
-  if (value === "project") return "Journey";
-  return "Ask each time";
+  return value === "project" ? "Journey" : "Company";
 }
 
 const DEFAULT_ALLOCATION_OPTIONS = [
   { value: "company", label: "Company" },
-  { value: "ask", label: "Ask each time" },
   { value: "project", label: "Journey" },
 ] as const;
 
 function categoryMeta(row: TransactionCategoryRow) {
   return `${transactionTypeLabel(row.transaction_type)} · ${row.cost_nature} · ${allocationLabel(row.default_allocation)}`;
+}
+
+const EMPTY_ROLE_IDS: string[] = [];
+
+function categoryRolesLabel(row: TransactionCategoryRow, roles: RoleOption[]) {
+  if (row.roleIds.length === 0) return "All roles";
+  const names = row.roleIds
+    .map((id) => roles.find((role) => role.id === id)?.name)
+    .filter((name): name is string => Boolean(name));
+  return names.length > 0 ? names.join(", ") : "—";
+}
+
+function CategoryRoleField({
+  roles,
+  selectedIds = EMPTY_ROLE_IDS,
+  compact = false,
+}: {
+  roles: RoleOption[];
+  selectedIds?: string[];
+  /** Inline on the add-category row (no helper line). */
+  compact?: boolean;
+}) {
+  const [selected, setSelected] = useState(() => [...selectedIds]);
+
+  if (roles.length === 0) {
+    return (
+      <p className="text-sm text-muted">
+        No roles yet. Create roles under Users &amp; Roles, then link them here.
+      </p>
+    );
+  }
+
+  const roleOptions = roles.map((role) => ({ value: role.id, label: role.name }));
+
+  return (
+    <div className="block min-w-0 space-y-1">
+      <span className="label">{compact ? "Roles" : "Roles (Finance access)"}</span>
+      {!compact ? <p className="text-xs text-muted">Leave empty to allow every role.</p> : null}
+      <SelectField
+        multiple
+        searchable
+        compact={compact}
+        autoSelectWhenSingle={false}
+        valueMultiple={selected}
+        onChangeMultiple={setSelected}
+        placeholder="All roles"
+        options={roleOptions}
+      />
+      {selected.map((id) => (
+        <input key={id} type="hidden" name="role_ids" value={id} />
+      ))}
+    </div>
+  );
 }
 
 export function MasterPanel({
@@ -74,16 +131,7 @@ export function MasterPanel({
     <div className="mx-auto max-w-5xl space-y-6">
       {notice ? <Notice message={notice} /> : null}
       {data.error ? <Notice message={data.error} /> : null}
-      {data.kind === "accounts" ? (
-        <NamedMaster
-          fieldName="name"
-          fieldLabel="Account name"
-          action={createAccount}
-          deleteAction={deleteAccount}
-          rows={data.rows}
-          empty="No accounts yet."
-        />
-      ) : null}
+      {data.kind === "accounts" ? <AccountMaster rows={data.rows} users={data.users ?? []} /> : null}
       {data.kind === "payment-modes" ? (
         <NamedMaster
           fieldName="mode"
@@ -94,10 +142,247 @@ export function MasterPanel({
           empty="No payments yet."
         />
       ) : null}
-      {data.kind === "transactions" ? <TransactionCategoriesMaster rows={data.rows} /> : null}
+      {data.kind === "transactions" ? (
+        <TransactionCategoriesMaster rows={data.rows} roles={data.roles} />
+      ) : null}
       {data.kind === "vendors" ? <VendorMaster rows={data.rows} /> : null}
       {data.kind === "fishes" ? <FishMaster rows={data.rows} /> : null}
       {data.kind === "districts" ? <DistrictMaster rows={data.rows} /> : null}
+    </div>
+  );
+}
+
+const ACCOUNT_TYPE_OPTIONS = [
+  { value: "account", label: "Account" },
+  { value: "wallet", label: "Wallet" },
+];
+
+function accountTypeLabel(value: AccountRow["accountType"]) {
+  return value === "wallet" ? "Wallet" : "Account";
+}
+
+function accountLedgerLabel(row: Pick<AccountRow, "name" | "accountType">) {
+  return `${row.name} ${accountTypeLabel(row.accountType)}`;
+}
+
+function linkUserOptions(users: LinkUserOption[]) {
+  return [{ value: "", label: "None" }, ...users.map((user) => ({ value: user.id, label: user.username }))];
+}
+
+function openingBalanceAsOf(row: AccountRow) {
+  const iso = row.openingBalanceDate || todayIsoDate();
+  return formatDisplayDate(iso);
+}
+
+function openingBalanceSummary(row: AccountRow) {
+  return `${formatAmount(row.openingBalance)} · ${openingBalanceAsOf(row)}`;
+}
+
+function AccountMaster({ rows, users }: { rows: AccountRow[]; users: LinkUserOption[] }) {
+  const [state, formAction, pending] = useActionState(createAccount, null);
+  const [editRow, setEditRow] = useState<AccountRow | null>(null);
+  const [formKey, setFormKey] = useState(0);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>(["account"]);
+  const wasPendingRef = useRef(false);
+
+  useEffect(() => {
+    if (wasPendingRef.current && !pending && state === null) {
+      setFormKey((key) => key + 1);
+      setSelectedTypes(["account"]);
+    }
+    wasPendingRef.current = pending;
+  }, [pending, state]);
+
+  return (
+    <>
+      <EntryCard>
+        <form key={formKey} action={formAction} className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_repeat(4,minmax(0,1fr))_auto] xl:items-end">
+            <label className="block min-w-0 space-y-1 md:col-span-2 xl:col-span-1">
+              <span className="label">Account name</span>
+              <input name="name" required className={inputClass} placeholder="e.g. SBI current" />
+            </label>
+            <div className="field-stack block min-w-0 space-y-1">
+              <span className="label">Type</span>
+              <SelectField
+                multiple
+                showCountOnly={false}
+                valueMultiple={selectedTypes}
+                onChangeMultiple={setSelectedTypes}
+                placeholder="Select type(s)…"
+                options={ACCOUNT_TYPE_OPTIONS}
+              />
+              {selectedTypes.map((type) => (
+                <input key={type} type="hidden" name="account_types" value={type} />
+              ))}
+            </div>
+            <div className="field-stack block min-w-0 space-y-1">
+              <span className="label">Linked to</span>
+              <SelectField name="linked_user_id" defaultValue="" placeholder="None" options={linkUserOptions(users)} />
+            </div>
+            <label className="block min-w-0 space-y-1">
+              <span className="label">Opening balance</span>
+              <input
+                name="opening_balance"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                defaultValue="0"
+                className={inputClass}
+                placeholder="0"
+              />
+            </label>
+            <div className="field-stack block min-w-0 space-y-1">
+              <span className="label">Opening balance date</span>
+              <DateField name="opening_balance_date" defaultValue={todayIsoDate()} />
+            </div>
+            <div className="md:col-span-2 xl:col-span-1 xl:justify-self-end">
+              <button
+                type="submit"
+                disabled={pending || selectedTypes.length === 0}
+                className="btn-primary w-full md:w-auto"
+              >
+                {pending ? "Saving…" : "Add"}
+              </button>
+            </div>
+          </div>
+          {state?.error ? <p className="text-sm font-medium text-red-600">{state.error}</p> : null}
+          {users.length === 0 ? (
+            <p className="text-sm text-muted">
+              No usernames to link yet. Add users under Users &amp; Roles, or run{" "}
+              <code className="text-xs">db:push</code> if this project was recently updated.
+            </p>
+          ) : null}
+        </form>
+      </EntryCard>
+
+      <RowsCard empty="No accounts yet." count={rows.length}>
+        <ul className="divide-y divide-line md:hidden">
+          {rows.map((row) => (
+            <li key={row.id} className="flex items-start justify-between gap-3 px-4 py-3">
+              <div className="min-w-0">
+                <p className="font-semibold break-words">{accountLedgerLabel(row)}</p>
+                <p className="text-sm text-muted">{row.linkedUsername ?? "Not linked"}</p>
+                <p className="text-sm tabular-nums text-muted">Opening: {openingBalanceSummary(row)}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button type="button" className="pill pill-blue" onClick={() => setEditRow(row)}>
+                  Edit
+                </button>
+                <DeleteButton action={deleteAccount} id={row.id} label={accountLedgerLabel(row)} />
+              </div>
+            </li>
+          ))}
+        </ul>
+        <div className="hidden overflow-x-auto md:block">
+          <table className="w-full min-w-0 text-left text-sm">
+            <thead className="bg-blue-soft text-blue-dark">
+              <tr>
+                <th className="px-4 py-3 font-semibold">Account</th>
+                <th className="px-4 py-3 font-semibold">Linked to</th>
+                <th className="px-4 py-3 font-semibold">Opening balance</th>
+                <th className="px-4 py-3 font-semibold">As of</th>
+                <th className="px-4 py-3 text-right font-semibold"> </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.id} className="border-t border-line">
+                  <td className="px-4 py-3 font-medium">{accountLedgerLabel(row)}</td>
+                  <td className="px-4 py-3 text-[var(--text-secondary)]">{row.linkedUsername ?? "—"}</td>
+                  <td className="px-4 py-3 tabular-nums">{formatAmount(row.openingBalance)}</td>
+                  <td className="px-4 py-3 text-[var(--text-secondary)]">{openingBalanceAsOf(row)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button type="button" className="pill pill-blue" onClick={() => setEditRow(row)}>
+                        Edit
+                      </button>
+                      <DeleteButton action={deleteAccount} id={row.id} label={accountLedgerLabel(row)} />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </RowsCard>
+
+      {editRow ? <AccountModal row={editRow} users={users} onClose={() => setEditRow(null)} /> : null}
+    </>
+  );
+}
+
+function AccountModal({
+  row,
+  users,
+  onClose,
+}: {
+  row: AccountRow;
+  users: LinkUserOption[];
+  onClose: () => void;
+}) {
+  const [state, formAction, pending] = useActionState(updateAccount, null);
+  const wasPendingRef = useRef(false);
+
+  useEffect(() => {
+    if (wasPendingRef.current && !pending && state === null) onClose();
+    wasPendingRef.current = pending;
+  }, [pending, state, onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-blue-dark/40 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-2xl border border-line bg-white shadow-xl">
+        <div className="border-b border-line px-5 py-4">
+          <h2 className="text-lg font-bold text-blue-dark">Edit account</h2>
+        </div>
+        <form action={formAction} className="space-y-4 p-5">
+          <input type="hidden" name="id" value={row.id} />
+          <label className="block space-y-1">
+            <span className="label">Account name</span>
+            <input name="name" required defaultValue={row.name} className={inputClass} />
+          </label>
+          <div className="field-stack block space-y-1">
+            <span className="label">Type</span>
+            <SelectField name="account_type" required defaultValue={row.accountType} options={ACCOUNT_TYPE_OPTIONS} />
+          </div>
+          <div className="field-stack block space-y-1">
+            <span className="label">Linked to</span>
+            <SelectField
+              name="linked_user_id"
+              defaultValue={row.linkedUserId ?? ""}
+              placeholder="None"
+              options={linkUserOptions(users)}
+            />
+          </div>
+          <label className="block space-y-1">
+            <span className="label">Opening balance</span>
+            <input
+              name="opening_balance"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              required
+              defaultValue={row.openingBalance}
+              className={inputClass}
+            />
+          </label>
+          <div className="field-stack block space-y-1">
+            <span className="label">Opening balance date</span>
+            <DateField
+              name="opening_balance_date"
+              defaultValue={row.openingBalanceDate || todayIsoDate()}
+            />
+          </div>
+          <FormFooter error={state?.error} pending={pending} label="Save" />
+        </form>
+        <div className="border-t border-line bg-page px-5 py-3 text-right">
+          <button type="button" onClick={onClose} className="btn-quiet">
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -110,14 +395,14 @@ function Notice({ message }: { message: string }) {
   );
 }
 
-function TransactionCategoriesMaster({ rows }: { rows: TransactionCategoryRow[] }) {
+function TransactionCategoriesMaster({ rows, roles }: { rows: TransactionCategoryRow[]; roles: RoleOption[] }) {
   const [state, formAction, pending] = useActionState(createTransactionCategory, null);
   const [editRow, setEditRow] = useState<TransactionCategoryRow | null>(null);
   return (
     <>
       <EntryCard>
         <form action={formAction} className="space-y-3">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))_auto] xl:items-end">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.95fr)_minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,1fr)_auto] xl:items-end">
             <label className="block min-w-0 space-y-1 md:col-span-2 xl:col-span-1">
               <span className="label">Category name</span>
               <input name="name" required className={inputClass} placeholder="e.g. Office rent" />
@@ -149,10 +434,11 @@ function TransactionCategoriesMaster({ rows }: { rows: TransactionCategoryRow[] 
               <SelectField
                 name="default_allocation"
                 required
-                defaultValue="ask"
+                defaultValue="company"
                 options={[...DEFAULT_ALLOCATION_OPTIONS]}
               />
             </label>
+            <CategoryRoleField roles={roles} compact />
             <div className="md:col-span-2 xl:col-span-1 xl:justify-self-end">
               <button type="submit" disabled={pending} className="btn-primary w-full md:w-auto">
                 {pending ? "Saving…" : "Add"}
@@ -170,6 +456,7 @@ function TransactionCategoriesMaster({ rows }: { rows: TransactionCategoryRow[] 
               <div className="min-w-0">
                 <p className="font-semibold break-words">{row.name}</p>
                 <p className="text-sm text-muted">{categoryMeta(row)}</p>
+                <p className="text-sm text-muted">Roles: {categoryRolesLabel(row, roles)}</p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <button type="button" className="pill pill-blue" onClick={() => setEditRow(row)}>
@@ -186,6 +473,7 @@ function TransactionCategoriesMaster({ rows }: { rows: TransactionCategoryRow[] 
               <tr>
                 <th className="px-4 py-3 font-semibold">Category</th>
                 <th className="px-4 py-3 font-semibold">Setup</th>
+                <th className="px-4 py-3 font-semibold">Roles</th>
                 <th className="px-4 py-3 text-right font-semibold"> </th>
               </tr>
             </thead>
@@ -194,6 +482,7 @@ function TransactionCategoriesMaster({ rows }: { rows: TransactionCategoryRow[] 
                 <tr key={row.id} className="border-t border-line">
                   <td className="px-4 py-3 font-medium">{row.name}</td>
                   <td className="px-4 py-3 text-[var(--text-secondary)]">{categoryMeta(row)}</td>
+                  <td className="px-4 py-3 text-[var(--text-secondary)]">{categoryRolesLabel(row, roles)}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button type="button" className="pill pill-blue" onClick={() => setEditRow(row)}>
@@ -210,7 +499,7 @@ function TransactionCategoriesMaster({ rows }: { rows: TransactionCategoryRow[] 
       </RowsCard>
 
       {editRow ? (
-        <TransactionCategoryModal row={editRow} onClose={() => setEditRow(null)} />
+        <TransactionCategoryModal row={editRow} roles={roles} onClose={() => setEditRow(null)} />
       ) : null}
     </>
   );
@@ -218,9 +507,11 @@ function TransactionCategoriesMaster({ rows }: { rows: TransactionCategoryRow[] 
 
 function TransactionCategoryModal({
   row,
+  roles,
   onClose,
 }: {
   row: TransactionCategoryRow;
+  roles: RoleOption[];
   onClose: () => void;
 }) {
   const [state, formAction, pending] = useActionState(updateTransactionCategory, null);
@@ -274,6 +565,7 @@ function TransactionCategoryModal({
               options={[...DEFAULT_ALLOCATION_OPTIONS]}
             />
           </label>
+          <CategoryRoleField key={row.id} roles={roles} selectedIds={row.roleIds} />
           <FormFooter error={state?.error} pending={pending} label="Save" />
         </form>
         <div className="border-t border-line bg-page px-5 py-3 text-right">
@@ -332,8 +624,16 @@ function NamedMaster({
   );
 }
 
+function vendorTypeLabel(row: VendorRow) {
+  if (row.vendorType === "Transporter" && row.transporterScope) {
+    return `Transporter · ${row.transporterScope}`;
+  }
+  return row.vendorType;
+}
+
 function VendorMaster({ rows }: { rows: VendorRow[] }) {
   const [state, action, pending] = useActionState(createVendor, null);
+  const [vendorType, setVendorType] = useState("Supplier");
 
   return (
     <>
@@ -356,15 +656,33 @@ function VendorMaster({ rows }: { rows: VendorRow[] }) {
               className={inputClass}
             />
           </label>
-          <label className="block min-w-[200px] flex-1 space-y-1">
+          <label className="block min-w-[160px] space-y-1">
             <span className="label">Vendor type</span>
             <SelectField
               name="vendor_type"
               required
-              defaultValue="Supplier"
+              value={vendorType}
+              onChange={setVendorType}
               options={[
                 { value: "Supplier", label: "Supplier" },
                 { value: "Transporter", label: "Transporter" },
+              ]}
+            />
+          </label>
+          <label
+            className={`block min-w-[160px] shrink-0 space-y-1 ${vendorType !== "Transporter" ? "invisible" : ""}`}
+            aria-hidden={vendorType !== "Transporter"}
+          >
+            <span className="label">Transporter scope</span>
+            <SelectField
+              name="transporter_scope"
+              required={vendorType === "Transporter"}
+              disabled={vendorType !== "Transporter"}
+              placeholder="Select scope"
+              autoSelectWhenSingle={false}
+              options={[
+                { value: "Local", label: "Local" },
+                { value: "Non-Local", label: "Non-Local" },
               ]}
             />
           </label>
@@ -378,7 +696,7 @@ function VendorMaster({ rows }: { rows: VendorRow[] }) {
               <div className="min-w-0">
                 <p className="font-semibold break-words">{row.name}</p>
                 <p className="text-sm text-muted">{row.contactNumber}</p>
-                <p className="text-sm">{row.vendorType}</p>
+                <p className="text-sm">{vendorTypeLabel(row)}</p>
               </div>
               <DeleteButton action={deleteVendor} id={row.id} label={row.name} />
             </li>
@@ -399,7 +717,7 @@ function VendorMaster({ rows }: { rows: VendorRow[] }) {
               <tr key={row.id} className="border-t border-line">
                 <td className="px-4 py-3 font-medium">{row.name}</td>
                 <td className="px-4 py-3">{row.contactNumber}</td>
-                <td className="px-4 py-3">{row.vendorType}</td>
+                <td className="px-4 py-3">{vendorTypeLabel(row)}</td>
                 <td className="px-4 py-3 text-right">
                   <DeleteButton action={deleteVendor} id={row.id} label={row.name} />
                 </td>

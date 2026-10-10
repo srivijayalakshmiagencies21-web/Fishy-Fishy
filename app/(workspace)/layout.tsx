@@ -3,6 +3,8 @@ import { AppShell } from "@/components/app-shell";
 import { NavIntentProvider } from "@/components/nav-intent";
 import { getSessionUser } from "@/lib/session";
 
+export const dynamic = "force-dynamic";
+
 export default async function WorkspaceLayout({
   children,
 }: {

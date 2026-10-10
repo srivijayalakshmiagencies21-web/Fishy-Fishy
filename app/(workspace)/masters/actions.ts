@@ -4,11 +4,12 @@ import { revalidatePath } from "next/cache";
 import { invalidateMasterCache } from "@/lib/cache-tags.server";
 import { loadMasterCached } from "@/lib/cached-masters.server";
 import { redirect } from "next/navigation";
-import type { VendorType } from "@/supabase/database.types";
+import type { TransporterScope, VendorType } from "@/supabase/database.types";
 import { getMasterLink } from "@/lib/master-links";
 import { readableError, type MasterData } from "@/lib/masters";
 import { createClient } from "@/lib/supabase/server";
 import { isValidMobile } from "@/lib/phone";
+import { todayIsoDate } from "@/lib/transactions";
 
 export type FormState = { error: string } | null;
 
@@ -22,7 +23,7 @@ function fail(message: string): FormState {
 
 export async function fetchMaster(slug: string): Promise<MasterData> {
   if (!getMasterLink(slug)) {
-    return { kind: "accounts", rows: [], error: "Unknown master." };
+    return { kind: "accounts", rows: [], users: [], error: "Unknown master." };
   }
 
   return loadMasterCached(slug);
@@ -56,12 +57,134 @@ async function findOrCreateNamed(
   return { error: null, id: data.id };
 }
 
-export async function createAccount(_state: FormState, formData: FormData): Promise<FormState> {
+const ACCOUNT_TYPES = new Set(["account", "wallet"]);
+
+function parseOpeningBalance(raw: string) {
+  const normalized = raw.replace(/,/g, "").trim();
+  if (!normalized) return 0;
+  const amount = Number(normalized);
+  if (!Number.isFinite(amount) || amount < 0) return null;
+  return Math.round(amount * 100) / 100;
+}
+
+function parseOpeningBalanceDate(formData: FormData) {
+  const raw = text(formData, "opening_balance_date");
+  return raw || todayIsoDate();
+}
+
+function parseAccountTypes(formData: FormData) {
+  const types = formData
+    .getAll("account_types")
+    .map((value) => String(value))
+    .filter((value) => ACCOUNT_TYPES.has(value));
+  return [...new Set(types)];
+}
+
+function parseAccountCreate(formData: FormData):
+  | { ok: false; error: string }
+  | {
+      ok: true;
+      payload: {
+        name: string;
+        linked_user_id: string | null;
+        account_types: string[];
+        opening_balance: number;
+        opening_balance_date: string;
+      };
+    } {
   const name = text(formData, "name");
-  if (!name) return { error: "Enter an account name." };
+  const linked_user_id = text(formData, "linked_user_id") || null;
+  const account_types = parseAccountTypes(formData);
+  const opening_balance = parseOpeningBalance(text(formData, "opening_balance"));
+  const opening_balance_date = parseOpeningBalanceDate(formData);
+
+  if (!name) return { ok: false, error: "Enter an account name." };
+  if (account_types.length === 0) {
+    return { ok: false, error: "Choose at least one type: Account and/or Wallet." };
+  }
+  if (opening_balance == null) return { ok: false, error: "Enter a valid opening balance (0 or more)." };
+
+  return {
+    ok: true,
+    payload: {
+      name,
+      linked_user_id,
+      account_types,
+      opening_balance,
+      opening_balance_date,
+    },
+  };
+}
+
+function parseAccountUpdate(formData: FormData):
+  | { ok: false; error: string }
+  | {
+      ok: true;
+      payload: {
+        name: string;
+        account_type: string;
+        linked_user_id: string | null;
+        opening_balance: number;
+        opening_balance_date: string;
+      };
+    } {
+  const name = text(formData, "name");
+  const account_type = text(formData, "account_type");
+  const linked_user_id = text(formData, "linked_user_id") || null;
+  const opening_balance = parseOpeningBalance(text(formData, "opening_balance"));
+  const opening_balance_date = parseOpeningBalanceDate(formData);
+
+  if (!name) return { ok: false, error: "Enter an account name." };
+  if (!ACCOUNT_TYPES.has(account_type)) return { ok: false, error: "Choose Account or Wallet." };
+  if (opening_balance == null) return { ok: false, error: "Enter a valid opening balance (0 or more)." };
+
+  return {
+    ok: true,
+    payload: {
+      name,
+      account_type,
+      linked_user_id,
+      opening_balance,
+      opening_balance_date,
+    },
+  };
+}
+
+export async function createAccount(_state: FormState, formData: FormData): Promise<FormState> {
+  const parsed = parseAccountCreate(formData);
+  if (!parsed.ok) return { error: parsed.error };
 
   const supabase = await createClient();
-  const { error } = await supabase.from("accounts").insert({ name });
+  const rows = parsed.payload.account_types.map((account_type) => ({
+    name: parsed.payload.name,
+    account_type,
+    linked_user_id: parsed.payload.linked_user_id,
+    opening_balance: parsed.payload.opening_balance,
+    opening_balance_date: parsed.payload.opening_balance_date,
+  }));
+
+  const { error } = await supabase.from("accounts").insert(rows);
+  if (error) {
+    if (/duplicate|unique/i.test(error.message)) {
+      return fail("That name already exists for one of the selected types.");
+    }
+    return fail(error.message);
+  }
+
+  revalidatePath("/masters/accounts");
+  invalidateMasterCache("accounts");
+  return null;
+}
+
+export async function updateAccount(_state: FormState, formData: FormData): Promise<FormState> {
+  const id = Number(formData.get("id"));
+  if (!id) return { error: "Missing account." };
+
+  const parsed = parseAccountUpdate(formData);
+  if (!parsed.ok) return { error: parsed.error };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("accounts").update(parsed.payload).eq("id", id);
   if (error) return fail(error.message);
 
   revalidatePath("/masters/accounts");
@@ -89,7 +212,33 @@ const COST_NATURES = new Set([
   "Revenue",
   "Non-Cost",
 ]);
-const DEFAULT_ALLOCATIONS = new Set(["company", "ask", "project"]);
+const DEFAULT_ALLOCATIONS = new Set(["company", "project"]);
+
+function parseRoleIds(formData: FormData) {
+  return [...new Set(formData.getAll("role_ids").map((value) => String(value).trim()).filter(Boolean))];
+}
+
+async function syncTransactionCategoryRoles(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  categoryId: number,
+  roleIds: string[],
+) {
+  const { error: deleteError } = await supabase
+    .from("transaction_category_roles")
+    .delete()
+    .eq("category_id", categoryId);
+  if (deleteError) return deleteError.message;
+
+  if (roleIds.length === 0) return null;
+
+  const { error: insertError } = await supabase.from("transaction_category_roles").insert(
+    roleIds.map((role_id) => ({
+      category_id: categoryId,
+      role_id,
+    })),
+  );
+  return insertError?.message ?? null;
+}
 
 function parseTransactionCategory(formData: FormData):
   | { ok: false; error: string }
@@ -130,12 +279,22 @@ function parseTransactionCategory(formData: FormData):
 export async function createTransactionCategory(_state: FormState, formData: FormData): Promise<FormState> {
   const parsed = parseTransactionCategory(formData);
   if (!parsed.ok) return { error: parsed.error };
+  const roleIds = parseRoleIds(formData);
 
   const supabase = await createClient();
-  const { error } = await supabase.from("transaction_categories").insert(parsed.payload);
+  const { data, error } = await supabase
+    .from("transaction_categories")
+    .insert(parsed.payload)
+    .select("id")
+    .single();
   if (error) return fail(error.message);
 
+  const roleError = await syncTransactionCategoryRoles(supabase, data.id, roleIds);
+  if (roleError) return fail(roleError);
+
   revalidatePath("/masters/transactions");
+  revalidatePath("/finance-manager");
+  revalidatePath("/finance-executive");
   invalidateMasterCache("transactions");
   return null;
 }
@@ -147,11 +306,18 @@ export async function updateTransactionCategory(_state: FormState, formData: For
   const parsed = parseTransactionCategory(formData);
   if (!parsed.ok) return { error: parsed.error };
 
+  const roleIds = parseRoleIds(formData);
+
   const supabase = await createClient();
   const { error } = await supabase.from("transaction_categories").update(parsed.payload).eq("id", id);
   if (error) return fail(error.message);
 
+  const roleError = await syncTransactionCategoryRoles(supabase, id, roleIds);
+  if (roleError) return fail(roleError);
+
   revalidatePath("/masters/transactions");
+  revalidatePath("/finance-manager");
+  revalidatePath("/finance-executive");
   invalidateMasterCache("transactions");
   return null;
 }
@@ -173,11 +339,21 @@ export async function createVendor(_state: FormState, formData: FormData): Promi
     return { error: "Vendor type must be Supplier or Transporter." };
   }
 
+  const transporterScopeRaw = text(formData, "transporter_scope");
+  let transporter_scope: TransporterScope | null = null;
+  if (vendorType === "Transporter") {
+    if (transporterScopeRaw !== "Local" && transporterScopeRaw !== "Non-Local") {
+      return { error: "Choose Local or Non-Local for transporters." };
+    }
+    transporter_scope = transporterScopeRaw;
+  }
+
   const supabase = await createClient();
   const { error } = await supabase.from("vendors").insert({
     name,
     contact_number: contactNumber,
     vendor_type: vendorType as VendorType,
+    transporter_scope,
   });
   if (error) return fail(error.message);
 

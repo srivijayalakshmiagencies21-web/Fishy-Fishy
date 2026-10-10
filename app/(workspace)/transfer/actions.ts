@@ -43,7 +43,7 @@ export async function startTransfer(journeyId: string) {
 
   revalidatePath("/start");
   revalidatePath("/transfer");
-  revalidatePath("/overview");
+  revalidatePath("/timeline");
   invalidateJourneyCaches();
   return { success: true };
 }
@@ -311,7 +311,7 @@ export async function recordTransfer(state: unknown, formData: FormData) {
   revalidatePath("/transfer");
   revalidatePath("/final");
   revalidatePath("/start");
-  revalidatePath("/overview");
+  revalidatePath("/timeline");
   invalidateJourneyCaches();
   return { success: true };
 }
@@ -449,7 +449,7 @@ export async function deleteTransferRecording(journeyId: string) {
   revalidatePath("/transfer");
   revalidatePath("/final");
   revalidatePath("/start");
-  revalidatePath("/overview");
+  revalidatePath("/timeline");
   invalidateJourneyCaches();
   return { success: true };
 }

@@ -1,12 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { accountEmail } from "@/lib/account-email";
 import { createClient } from "@/lib/supabase/client";
 
 export function LoginForm() {
-  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -36,8 +34,15 @@ export function LoginForm() {
       return;
     }
 
-    router.push("/masters/accounts");
-    router.refresh();
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !sessionData.session) {
+      setPending(false);
+      setError(sessionError?.message ?? "Sign-in succeeded but session was not saved. Try again.");
+      return;
+    }
+
+    // Full navigation so auth cookies and server components match (soft router nav can show a blank shell).
+    window.location.assign("/enter");
   }
 
   return (

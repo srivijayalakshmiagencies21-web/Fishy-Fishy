@@ -1,6 +1,6 @@
-const CACHE_NAME = 'fishy-fishy-pwa-v2';
+const CACHE_NAME = 'fishy-fishy-pwa-v3';
 
-self.addEventListener('install', (event) => {
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
@@ -18,11 +18,18 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Only page navigations get an offline fallback; every other request (RSC, prefetch,
+// assets, Supabase) goes straight to the network without a service-worker hop.
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
+  const { request } = event;
+  if (request.method !== 'GET' || request.mode !== 'navigate') return;
   event.respondWith(
-    fetch(event.request).catch(() => {
-      return caches.match(event.request);
-    })
+    fetch(request).catch(
+      () =>
+        new Response('You are offline. Reconnect and try again.', {
+          status: 503,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        })
+    )
   );
 });

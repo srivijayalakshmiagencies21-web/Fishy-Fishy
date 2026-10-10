@@ -213,6 +213,13 @@ export function UserManagement({
     : users.filter((user) => user.role_name === "Manager" || user.role_name === "Employee");
   const visibleRoles = actorRole === "Admin" ? roles : roles.filter((role) => role.name !== "Admin");
 
+  function toggleRolePage(pageKey: string) {
+    setRolePages((current) => {
+      if (current.includes(pageKey)) return current.filter((key) => key !== pageKey);
+      return [...current, pageKey];
+    });
+  }
+
   function openRoleForm(role?: RoleRow) {
     if (role) {
       setEditingRoleId(role.id);
@@ -411,21 +418,26 @@ export function UserManagement({
               <fieldset>
                 <legend className="label">Allowed pages</legend>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {appPages.map((page) => (
-                    <label key={page.key} className={`flex items-center gap-3 rounded-xl border px-3 py-3 ${rolePages.includes(page.key) ? "border-[var(--brand)] bg-[var(--brand-soft)]" : "border-[var(--border)]"}`}>
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 accent-[var(--brand)]"
-                        checked={rolePages.includes(page.key)}
-                        onChange={() =>
-                          setRolePages((current) =>
-                            current.includes(page.key) ? current.filter((key) => key !== page.key) : [...current, page.key],
-                          )
-                        }
-                      />
-                      <span className="text-sm font-medium">{page.label}</span>
-                    </label>
-                  ))}
+                  {appPages.map((page) => {
+                    const selected = rolePages.includes(page.key);
+                    return (
+                      <label
+                        key={page.key}
+                        className={[
+                          "flex min-h-[2.75rem] cursor-pointer items-center gap-3 rounded-xl border px-3 py-3",
+                          selected ? "border-[var(--brand)] bg-[var(--brand-soft)]" : "border-[var(--border)]",
+                        ].join(" ")}
+                      >
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 shrink-0 accent-[var(--brand)]"
+                          checked={selected}
+                          onChange={() => toggleRolePage(page.key)}
+                        />
+                        <span className="text-sm font-medium">{page.label}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               </fieldset>
               <div className="flex justify-end">

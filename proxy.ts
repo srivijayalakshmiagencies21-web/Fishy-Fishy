@@ -50,7 +50,7 @@ export async function proxy(request: NextRequest) {
 
   const isLogin = pathname === "/login";
   if (signedIn && (isLogin || pathname === "/")) {
-    return withSession(supabaseResponse, redirectTo(request, "/masters/accounts"));
+    return withSession(supabaseResponse, redirectTo(request, "/enter"));
   }
 
   return supabaseResponse;

@@ -22,8 +22,13 @@ function formatKm(value: number | null) {
 
 function formatStampTime(value: string) {
   const date = new Date(value);
-  const day = date.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-  const time = date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const day = date.toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" });
+  const time = date.toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Kolkata",
+  });
   return `${day} ${time}`;
 }
 

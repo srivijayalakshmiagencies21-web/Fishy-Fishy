@@ -1,11 +1,23 @@
 export const appPages = [
   { key: "masters", label: "Masters", href: "/masters/accounts", description: "Reference lists used across the workspace." },
-  { key: "overview", label: "Overview", href: "/overview", description: "Track active journeys across all points." },
+  { key: "timeline", label: "Timeline", href: "/timeline", description: "Track active journeys across all points." },
   {
-    key: "finance",
-    label: "Finance",
-    href: "/finance",
-    description: "Record money in, money out, and transfers between accounts.",
+    key: "journey-rates",
+    label: "Journey Rates",
+    href: "/journey-rates",
+    description: "Closed journeys: start quantities and transporter kilometres.",
+  },
+  {
+    key: "finance-manager",
+    label: "Finance Manager",
+    href: "/finance-manager",
+    description: "Ledger and cost-nature KPIs for managers.",
+  },
+  {
+    key: "finance-executive",
+    label: "Finance Executive",
+    href: "/finance-executive",
+    description: "Wallet ledger and executive KPIs.",
   },
   { key: "start", label: "Start Point", href: "/start", description: "Where a load leaves from." },
   { key: "transfer", label: "Transfer Point", href: "/transfer", description: "Where a load changes hands." },

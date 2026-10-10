@@ -47,7 +47,7 @@ export async function startFinalUnload(journeyId: string) {
   revalidatePath("/final");
   revalidatePath("/transfer");
   revalidatePath("/start");
-  revalidatePath("/overview");
+  revalidatePath("/timeline");
   invalidateJourneyCaches();
   return { success: true };
 }
@@ -301,7 +301,7 @@ export async function recordUnload(state: unknown, formData: FormData) {
   revalidatePath("/final");
   revalidatePath("/transfer");
   revalidatePath("/start");
-  revalidatePath("/overview");
+  revalidatePath("/timeline");
   revalidatePath("/masters/districts");
   invalidateJourneyCaches();
   invalidateMasterCache("districts");
@@ -410,7 +410,7 @@ export async function deleteFinalUnloadRecording(journeyId: string) {
   revalidatePath("/final");
   revalidatePath("/transfer");
   revalidatePath("/start");
-  revalidatePath("/overview");
+  revalidatePath("/timeline");
   invalidateJourneyCaches();
   return { success: true };
 }

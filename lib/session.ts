@@ -17,6 +17,17 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     return null;
   }
 
+  const { data: accessRows, error: accessError } = await supabase.rpc("get_my_access");
+  if (!accessError && accessRows?.[0]) {
+    const access = accessRows[0];
+    return {
+      id: typeof claims.sub === "string" ? claims.sub : "",
+      email: typeof claims.email === "string" ? claims.email : "",
+      role: access.role ?? "",
+      pages: access.pages ?? [],
+    };
+  }
+
   const [{ data: pages }, { data: role }] = await Promise.all([
     supabase.rpc("get_my_pages"),
     supabase.rpc("get_my_role"),

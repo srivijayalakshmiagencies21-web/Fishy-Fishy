@@ -226,7 +226,41 @@ input[type="number"]::-webkit-inner-spin-button {
 .select-field-menu.is-fixed {
   position: fixed;
   right: auto;
-  z-index: 60;
+  z-index: 200;
+}
+
+.select-field-trigger-combobox {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: text;
+}
+
+.select-field-combobox-input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  outline: none;
+  box-shadow: none;
+}
+
+.select-field-combobox-input::placeholder {
+  color: var(--text-secondary);
+}
+
+.select-field-combobox-chevron {
+  display: flex;
+  shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
 }
 
 .date-field-menu {
@@ -358,7 +392,7 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .data-card {
-  overflow: hidden;
+  overflow: visible;
 }
 
 .data-card thead th:first-child {

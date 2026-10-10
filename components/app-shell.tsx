@@ -35,17 +35,19 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
   const current = masterLinks.find((link) => pathname === `/masters/${link.slug}`);
   const shownMaster = masterLinks.find((link) => link.slug === (previewMaster ?? current?.slug)) ?? current;
   const directoryTab = adminTab ?? (pathname.startsWith("/admin/roles") ? "roles" : "users");
-  const onMasters = pathname.startsWith("/masters");
+  const onMasters = pathname.startsWith("/masters") && pages.includes("masters");
   const onUsers = pathname.startsWith("/admin");
   const currentPage = appPages.find((page) => page.href === pathname);
   const visibleNav = navItems
     .filter((item) => pages.includes(item.key) || (item.key === "users" && role === "Manager"))
     .map((item) => {
       let shortLabel: string = item.label;
-      if (item.key === "finance") shortLabel = "Finance";
+      if (item.key === "finance-manager") shortLabel = "Finance Manager";
+      if (item.key === "finance-executive") shortLabel = "Finance Executive";
       if (item.key === "start") shortLabel = "Start";
       if (item.key === "transfer") shortLabel = "Transfer";
       if (item.key === "final") shortLabel = "Final";
+      if (item.key === "journey-rates") shortLabel = "Rates";
       if (item.key === "users") shortLabel = "Users";
       if (item.key === "masters") shortLabel = "Masters";
       return { 
@@ -62,19 +64,28 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
   }, [collapsed]);
 
   useEffect(() => {
-    if (pages.includes("masters")) {
-      void prefetchMasters();
-      for (const link of masterLinks) router.prefetch(`/masters/${link.slug}`);
-    }
-    if (pages.includes("users") || role === "Manager") {
-      router.prefetch("/admin/users");
-      if (pages.includes("users")) router.prefetch("/admin/roles");
-    }
-    for (const item of navItems) {
-      if (item.key !== "masters" && item.key !== "users" && pages.includes(item.key)) {
-        router.prefetch(item.href);
+    function prefetchNav() {
+      if (pages.includes("masters")) {
+        void prefetchMasters();
+        for (const link of masterLinks) router.prefetch(`/masters/${link.slug}`);
+      }
+      if (pages.includes("users") || role === "Manager") {
+        router.prefetch("/admin/users");
+        if (pages.includes("users")) router.prefetch("/admin/roles");
+      }
+      for (const item of navItems) {
+        if (item.key !== "masters" && item.key !== "users" && pages.includes(item.key)) {
+          router.prefetch(item.href);
+        }
       }
     }
+
+    const idle = window.requestIdleCallback?.(prefetchNav, { timeout: 2500 });
+    const fallback = idle === undefined ? window.setTimeout(prefetchNav, 400) : undefined;
+    return () => {
+      if (idle !== undefined) window.cancelIdleCallback(idle);
+      if (fallback !== undefined) window.clearTimeout(fallback);
+    };
   }, [pages, role, router]);
 
   function openHref(event: React.MouseEvent<HTMLAnchorElement>, href: string, paint?: () => void) {
@@ -138,11 +149,11 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
             <p className="header-tagline">Seed logistics</p>
           </div>
           <div className="header-clock hidden items-center justify-center md:flex">
-            <span>{dayName}</span>
+            <span suppressHydrationWarning>{dayName}</span>
             <span className="header-clock-sep">|</span>
-            <span>{monthDay}</span>
+            <span suppressHydrationWarning>{monthDay}</span>
             <span className="header-clock-sep">|</span>
-            <span>{timeStr}</span>
+            <span suppressHydrationWarning>{timeStr}</span>
           </div>
           <div className="header-side header-side--right">
             <div className="relative">
@@ -322,8 +333,10 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
 }
 
 function NavIcon({ name }: { name: string }) {
-  if (name === "overview") return <OverviewIcon />;
-  if (name === "finance") return <FinanceIcon />;
+  if (name === "timeline") return <TimelineIcon />;
+  if (name === "journey-rates") return <JourneyRatesIcon />;
+  if (name === "finance-manager") return <FinanceRoleRupeeIcon letter="M" />;
+  if (name === "finance-executive") return <FinanceRoleRupeeIcon letter="E" />;
   if (name === "masters") return <MastersIcon />;
   if (name === "users") return <UsersIcon />;
   if (name === "start") return <StartIcon />;
@@ -331,7 +344,17 @@ function NavIcon({ name }: { name: string }) {
   return <FinalIcon />;
 }
 
-function OverviewIcon() {
+function JourneyRatesIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+      <path d="M8 7h8M8 11h8M8 15h5" />
+    </svg>
+  );
+}
+
+function TimelineIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
@@ -340,14 +363,34 @@ function OverviewIcon() {
   );
 }
 
-function FinanceIcon() {
+const navSvgProps = {
+  viewBox: "0 0 24 24",
+  className: "h-[18px] w-[18px]",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.8,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  "aria-hidden": true as const,
+};
+
+/** Rupee + m or e (lowercase, stroke, same weight as other nav icons). */
+function FinanceRoleRupeeIcon({ letter }: { letter: "M" | "E" }) {
   return (
-    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M6 3h12" />
-      <path d="M6 8h12" />
-      <path d="m6 13 8.5 8" />
-      <path d="M6 13h3" />
-      <path d="M9 13c6.667 0 6.667-10 0-10" />
+    <svg {...navSvgProps}>
+      <path d="M1.5 5h9" />
+      <path d="M1.5 8.75h9" />
+      <path d="m1.5 12.5 6.375 6" />
+      <path d="M1.5 12.5h2.25" />
+      <path d="M3.75 12.5c5 0 5-7.5 0-7.5" />
+      {letter === "M" ? (
+        <path d="M13.5 18.5V8l4.5 5.5 4.5-5.5v10.5" />
+      ) : (
+        <>
+          <path d="M21 8h-6.5v10.5H21" />
+          <path d="M14.5 13.25h5" />
+        </>
+      )}
     </svg>
   );
 }
