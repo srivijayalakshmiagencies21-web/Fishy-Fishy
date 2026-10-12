@@ -35,6 +35,15 @@ const inputClass = "input-field";
 type LedgerSortKey = "date" | "amount" | "journey";
 type SortDir = "asc" | "desc";
 
+const SORT_OPTIONS = [
+  { value: "date:desc", label: "Date · newest" },
+  { value: "date:asc", label: "Date · oldest" },
+  { value: "amount:desc", label: "Amount · high" },
+  { value: "amount:asc", label: "Amount · low" },
+  { value: "journey:asc", label: "Journey · low" },
+  { value: "journey:desc", label: "Journey · high" },
+];
+
 function allFilterOption(label: string) {
   return { value: "", label };
 }
@@ -194,6 +203,7 @@ export function TransactionsView({
   loadError: string | null;
 }) {
   const [formOpen, setFormOpen] = useState(false);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [filterType, setFilterType] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
@@ -236,6 +246,19 @@ export function TransactionsView({
     [rows, accountName],
   );
 
+  const typeCounts = useMemo(() => {
+    let all = ledgerEntries.length;
+    let inCount = 0;
+    let outCount = 0;
+    let transferCount = 0;
+    for (const { row } of ledgerEntries) {
+      if (row.type === "in") inCount++;
+      else if (row.type === "out") outCount++;
+      else if (row.type === "transfer") transferCount++;
+    }
+    return { all, inCount, outCount, transferCount };
+  }, [ledgerEntries]);
+
   const filterOptions = useMemo(() => {
     const categories = new Set<string>();
     const fromLabels = new Set<string>();
@@ -273,6 +296,15 @@ export function TransactionsView({
     Boolean(filterTo) ||
     Boolean(filterPayment) ||
     Boolean(filterDistrict);
+
+  const secondaryFilterCount = [
+    filterType,
+    filterCategory,
+    filterFrom,
+    filterTo,
+    filterPayment,
+    filterDistrict,
+  ].filter(Boolean).length;
 
   function toggleSort(key: LedgerSortKey) {
     if (sortKey === key) {
@@ -356,8 +388,80 @@ export function TransactionsView({
       />
 
       <section className="surface overflow-hidden">
-        <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto border-b border-line bg-[var(--page)] px-3 py-2">
-          <div className="flex min-h-[38px] min-w-[6.5rem] max-w-[9rem] shrink-0 grow basis-[7rem] items-center sm:basis-0">
+        {/* Mobile Filter & Sort Bar (md:hidden) */}
+        <div className="flex items-center justify-between gap-2 border-b border-line bg-[var(--page)] p-3 md:hidden">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            {/* Sort Order Dropdown */}
+            <div className="min-w-[130px] max-w-[170px] flex-1">
+              <SelectField
+                compact
+                autoSelectWhenSingle={false}
+                value={`${sortKey}:${sortDir}`}
+                onChange={(val) => {
+                  const [k, d] = val.split(":") as [LedgerSortKey, SortDir];
+                  if (k && d) {
+                    setSortKey(k);
+                    setSortDir(d);
+                  }
+                }}
+                placeholder="Sort by"
+                options={[
+                  { value: "date:desc", label: "Date · Newest" },
+                  { value: "date:asc", label: "Date · Oldest" },
+                  { value: "amount:desc", label: "Amount · High → Low" },
+                  { value: "amount:asc", label: "Amount · Low → High" },
+                  { value: "journey:asc", label: "Journey · Low → High" },
+                  { value: "journey:desc", label: "Journey · High → Low" },
+                ]}
+              />
+            </div>
+
+            {/* Filters Button */}
+            <button
+              type="button"
+              onClick={() => setFilterSheetOpen(true)}
+              className={`flex h-[38px] shrink-0 items-center gap-1.5 px-3 rounded-[10px] border text-xs font-semibold transition-all shadow-xs ${
+                secondaryFilterCount > 0
+                  ? "border-[var(--brand)] bg-blue-soft text-blue-dark font-bold ring-1 ring-[var(--brand)]/30"
+                  : "border-line bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <line x1="4" y1="21" x2="4" y2="14" />
+                <line x1="4" y1="10" x2="4" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12" y2="3" />
+                <line x1="20" y1="21" x2="20" y2="16" />
+                <line x1="20" y1="12" x2="20" y2="3" />
+                <line x1="1" y1="14" x2="7" y2="14" />
+                <line x1="9" y1="8" x2="15" y2="8" />
+                <line x1="17" y1="16" x2="23" y2="16" />
+              </svg>
+              <span>Filters</span>
+              {secondaryFilterCount > 0 ? (
+                <span className="flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-[var(--brand)] px-1 text-[10px] font-bold text-white">
+                  {secondaryFilterCount}
+                </span>
+              ) : null}
+            </button>
+          </div>
+
+          {/* Add Transaction Button */}
+          <button
+            type="button"
+            className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] bg-[var(--brand)] text-white shadow-sm hover:opacity-90 active:scale-95 transition-transform"
+            aria-label="New transaction"
+            onClick={() => setFormOpen(true)}
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden>
+              <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Desktop Filter Bar (md:flex) */}
+        <div className="hidden md:flex flex-wrap items-center gap-2 border-b border-line bg-[var(--page)] px-4 py-2.5">
+          <div className="min-w-[7.5rem] max-w-[9.5rem] flex-1">
             <SelectField
               compact
               searchable
@@ -373,7 +477,7 @@ export function TransactionsView({
               ]}
             />
           </div>
-          <div className="flex min-h-[38px] min-w-[6.5rem] max-w-[9rem] shrink-0 grow basis-[7rem] items-center sm:basis-0">
+          <div className="min-w-[7.5rem] max-w-[9.5rem] flex-1">
             <SelectField
               compact
               searchable
@@ -384,7 +488,7 @@ export function TransactionsView({
               options={[allFilterOption("All categories"), ...filterOptions.category]}
             />
           </div>
-          <div className="flex min-h-[38px] min-w-[6.5rem] max-w-[9rem] shrink-0 grow basis-[7rem] items-center sm:basis-0">
+          <div className="min-w-[7.5rem] max-w-[9.5rem] flex-1">
             <SelectField
               compact
               searchable
@@ -395,7 +499,7 @@ export function TransactionsView({
               options={[allFilterOption("All from"), ...filterOptions.from]}
             />
           </div>
-          <div className="flex min-h-[38px] min-w-[6.5rem] max-w-[9rem] shrink-0 grow basis-[7rem] items-center sm:basis-0">
+          <div className="min-w-[7.5rem] max-w-[9.5rem] flex-1">
             <SelectField
               compact
               searchable
@@ -406,7 +510,7 @@ export function TransactionsView({
               options={[allFilterOption("All to"), ...filterOptions.to]}
             />
           </div>
-          <div className="flex min-h-[38px] min-w-[6.5rem] max-w-[9rem] shrink-0 grow basis-[7rem] items-center sm:basis-0">
+          <div className="min-w-[7.5rem] max-w-[9.5rem] flex-1">
             <SelectField
               compact
               searchable
@@ -417,7 +521,7 @@ export function TransactionsView({
               options={[allFilterOption("All payments"), ...filterOptions.payment]}
             />
           </div>
-          <div className="flex min-h-[38px] min-w-[6.5rem] max-w-[9rem] shrink-0 grow basis-[7rem] items-center sm:basis-0">
+          <div className="min-w-[7.5rem] max-w-[9.5rem] flex-1">
             <SelectField
               compact
               searchable
@@ -428,33 +532,12 @@ export function TransactionsView({
               options={[allFilterOption("All districts"), ...filterOptions.district]}
             />
           </div>
-          <div className="flex min-h-[38px] min-w-[6.5rem] max-w-[9rem] shrink-0 items-center md:hidden">
-            <SelectField
-              compact
-              autoSelectWhenSingle={false}
-              value={`${sortKey}:${sortDir}`}
-              onChange={(value) => {
-                const [key, dir] = value.split(":") as [LedgerSortKey, SortDir];
-                setSortKey(key);
-                setSortDir(dir);
-              }}
-              placeholder="Sort"
-              options={[
-                { value: "date:desc", label: "Date · newest" },
-                { value: "date:asc", label: "Date · oldest" },
-                { value: "amount:desc", label: "Amount · high" },
-                { value: "amount:asc", label: "Amount · low" },
-                { value: "journey:asc", label: "Journey · low" },
-                { value: "journey:desc", label: "Journey · high" },
-              ]}
-            />
-          </div>
-          <div className="ml-auto flex h-[38px] shrink-0 items-center gap-2 pl-2">
-            <span className="text-sm tabular-nums leading-none text-muted">{filteredRows.length}</span>
+          <div className="ml-auto flex items-center gap-2 pl-2">
+            <span className="text-sm tabular-nums text-muted">{filteredRows.length} txns</span>
             {hasActiveFilters ? (
               <button
                 type="button"
-                className="btn-quiet px-2 py-1.5 text-xs leading-none whitespace-nowrap"
+                className="btn-quiet px-2 py-1.5 text-xs whitespace-nowrap"
                 onClick={clearFilters}
                 title="Clear filters"
               >
@@ -463,7 +546,7 @@ export function TransactionsView({
             ) : null}
             <button
               type="button"
-              className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-[var(--brand)] text-white hover:opacity-90"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--brand)] text-white hover:opacity-90 shadow-sm"
               aria-label="New transaction"
               onClick={() => setFormOpen(true)}
             >
@@ -473,34 +556,118 @@ export function TransactionsView({
             </button>
           </div>
         </div>
+
         {filteredRows.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-muted">No transactions yet.</p>
+          <div className="px-4 py-12 text-center">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-soft text-blue">
+              <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <rect x="3" y="4" width="18" height="16" rx="3" />
+                <line x1="7" y1="9" x2="17" y2="9" />
+                <line x1="7" y1="13" x2="13" y2="13" />
+              </svg>
+            </div>
+            <p className="font-semibold text-slate-800">
+              {hasActiveFilters ? "No matching transactions" : "No transactions recorded yet"}
+            </p>
+            <p className="mt-1 text-xs text-muted max-w-xs mx-auto">
+              {hasActiveFilters
+                ? "Try resetting filters or adjusting search parameters to see more entries."
+                : "Tap the + button to record your first transaction."}
+            </p>
+            <div className="mt-4 flex items-center justify-center gap-2">
+              {hasActiveFilters ? (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="btn-quiet px-3 py-1.5 text-xs font-semibold"
+                >
+                  Reset filters
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setFormOpen(true)}
+                className="btn-primary px-3 py-1.5 text-xs font-semibold"
+              >
+                + New transaction
+              </button>
+            </div>
+          </div>
         ) : (
           <>
             <ul className="divide-y divide-line md:hidden">
               {filteredRows.map((row) => {
                 const endpoints = transactionLedgerEndpoints(row, accountName);
+                const isIn = row.type === "in";
+                const isOut = row.type === "out";
                 return (
-                  <li key={row.id} className="space-y-1 px-4 py-3">
+                  <li key={row.id} className="p-3.5 space-y-2 hover:bg-slate-50/50 transition-colors">
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold">{formatAmount(row.amount)}</p>
-                        <p className="text-sm text-muted">
-                          {row.txn_date} · {txnTypeLabel(row.type)}
-                        </p>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold ${
+                            isIn
+                              ? "bg-emerald-100 text-emerald-700"
+                              : isOut
+                              ? "bg-rose-100 text-rose-700"
+                              : "bg-blue-100 text-blue-700"
+                          }`}
+                        >
+                          {isIn ? "↓" : isOut ? "↑" : "⇄"}
+                        </div>
+                        <div className="min-w-0">
+                          <p
+                            className={`font-bold tabular-nums text-base leading-tight ${
+                              isIn
+                                ? "text-emerald-700"
+                                : isOut
+                                ? "text-slate-900"
+                                : "text-blue-900"
+                            }`}
+                          >
+                            {isIn ? "+" : isOut ? "−" : ""}
+                            {formatAmount(row.amount)}
+                          </p>
+                          <p className="text-xs text-muted truncate">
+                            {row.txn_date} · <span className="font-medium text-slate-700">{txnTypeLabel(row.type)}</span>
+                          </p>
+                        </div>
                       </div>
                       <DeleteTxn id={row.id} />
                     </div>
-                    <p className="text-sm">{ledgerCategory(row)}</p>
-                    <p className="text-sm">
-                      From {endpoints.from} → To {endpoints.to}
-                    </p>
-                    {row.district_id != null ? (
-                      <p className="text-sm text-[var(--text-secondary)]">{districtName(row.district_id)}</p>
-                    ) : null}
-                    {row.journey_id ? (
-                      <p className="text-sm text-[var(--text-secondary)]">{journeyLabel(row.journey_id)}</p>
-                    ) : null}
+
+                    <div className="rounded-lg bg-slate-50 p-2 text-xs border border-slate-100 flex items-center justify-between gap-2">
+                      <div className="truncate min-w-0">
+                        <span className="text-muted">From:</span>{" "}
+                        <span className="font-medium text-slate-800">{endpoints.from}</span>
+                      </div>
+                      <span className="text-slate-400 shrink-0">→</span>
+                      <div className="truncate min-w-0 text-right">
+                        <span className="text-muted">To:</span>{" "}
+                        <span className="font-medium text-slate-800">{endpoints.to}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                      <span className="rounded bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
+                        {ledgerCategory(row)}
+                      </span>
+                      {row.payment_mode ? (
+                        <span className="rounded bg-blue-soft px-2 py-0.5 font-medium text-blue-dark">
+                          {row.payment_mode}
+                        </span>
+                      ) : null}
+                      {row.district_id != null ? (
+                        <span className="rounded bg-slate-100 px-2 py-0.5 text-muted">
+                          {districtName(row.district_id)}
+                        </span>
+                      ) : null}
+                      {row.journey_id ? (
+                        <span className="rounded bg-indigo-50 px-2 py-0.5 font-medium text-indigo-700">
+                          {journeyLabel(row.journey_id)}
+                        </span>
+                      ) : null}
+                    </div>
                   </li>
                 );
               })}
@@ -566,6 +733,34 @@ export function TransactionsView({
         )}
       </section>
 
+      {filterSheetOpen ? (
+        <MobileFilterSheet
+          isOpen={filterSheetOpen}
+          onClose={() => setFilterSheetOpen(false)}
+          filterType={filterType}
+          setFilterType={setFilterType}
+          filterCategory={filterCategory}
+          setFilterCategory={setFilterCategory}
+          filterFrom={filterFrom}
+          setFilterFrom={setFilterFrom}
+          filterTo={filterTo}
+          setFilterTo={setFilterTo}
+          filterPayment={filterPayment}
+          setFilterPayment={setFilterPayment}
+          filterDistrict={filterDistrict}
+          setFilterDistrict={setFilterDistrict}
+          sortKey={sortKey}
+          setSortKey={setSortKey}
+          sortDir={sortDir}
+          setSortDir={setSortDir}
+          filterOptions={filterOptions}
+          typeCounts={typeCounts}
+          filteredCount={filteredRows.length}
+          hasActiveFilters={hasActiveFilters}
+          onReset={clearFilters}
+        />
+      ) : null}
+
       {formOpen ? (
         <NewTransactionModal
           accounts={accounts}
@@ -579,6 +774,332 @@ export function TransactionsView({
           onClose={() => setFormOpen(false)}
         />
       ) : null}
+    </div>
+  );
+}
+
+function MobileFilterSheet({
+  isOpen,
+  onClose,
+  filterType,
+  setFilterType,
+  filterCategory,
+  setFilterCategory,
+  filterFrom,
+  setFilterFrom,
+  filterTo,
+  setFilterTo,
+  filterPayment,
+  setFilterPayment,
+  filterDistrict,
+  setFilterDistrict,
+  sortKey,
+  setSortKey,
+  sortDir,
+  setSortDir,
+  filterOptions,
+  typeCounts,
+  filteredCount,
+  hasActiveFilters,
+  onReset,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  filterType: string;
+  setFilterType: (val: string) => void;
+  filterCategory: string;
+  setFilterCategory: (val: string) => void;
+  filterFrom: string;
+  setFilterFrom: (val: string) => void;
+  filterTo: string;
+  setFilterTo: (val: string) => void;
+  filterPayment: string;
+  setFilterPayment: (val: string) => void;
+  filterDistrict: string;
+  setFilterDistrict: (val: string) => void;
+  sortKey: LedgerSortKey;
+  setSortKey: (val: LedgerSortKey) => void;
+  sortDir: SortDir;
+  setSortDir: (val: SortDir) => void;
+  filterOptions: {
+    category: { value: string; label: string }[];
+    from: { value: string; label: string }[];
+    to: { value: string; label: string }[];
+    payment: { value: string; label: string }[];
+    district: { value: string; label: string }[];
+  };
+  typeCounts: { all: number; inCount: number; outCount: number; transferCount: number };
+  filteredCount: number;
+  hasActiveFilters: boolean;
+  onReset: () => void;
+}) {
+  useEffect(() => {
+    if (!isOpen) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        className="flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-3xl border-t border-line bg-white shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mobile-filters-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Grab Handle */}
+        <div className="mx-auto my-2.5 h-1.5 w-12 rounded-full bg-slate-300 shrink-0" />
+
+        {/* Header */}
+        <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3">
+          <div>
+            <h2 id="mobile-filters-title" className="text-base font-bold text-blue-dark">
+              Filters
+            </h2>
+            <p className="text-xs text-muted">
+              {filteredCount} matching {filteredCount === 1 ? "entry" : "entries"}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {hasActiveFilters ? (
+              <button
+                type="button"
+                onClick={onReset}
+                className="rounded-lg bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-100 active:opacity-75"
+              >
+                Reset all
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
+              aria-label="Close filters"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Filter Body with Dropdowns for Each Filter */}
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4 pb-6">
+          {/* 1. Transaction Flow */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                Transaction Flow
+              </label>
+              {filterType ? (
+                <button
+                  type="button"
+                  onClick={() => setFilterType("")}
+                  className="text-xs font-semibold text-rose-600 hover:underline"
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+            <SelectField
+              autoSelectWhenSingle={false}
+              value={filterType}
+              onChange={setFilterType}
+              placeholder="All Flows"
+              options={[
+                { value: "", label: "All Flows" },
+                { value: "in", label: "Money In (↓)" },
+                { value: "out", label: "Money Out (↑)" },
+                { value: "transfer", label: "Transfer (⇄)" },
+              ]}
+            />
+          </div>
+
+          {/* 2. Category */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                Category
+              </label>
+              {filterCategory ? (
+                <button
+                  type="button"
+                  onClick={() => setFilterCategory("")}
+                  className="text-xs font-semibold text-rose-600 hover:underline"
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+            <SelectField
+              searchable
+              autoSelectWhenSingle={false}
+              value={filterCategory}
+              onChange={setFilterCategory}
+              placeholder="All categories"
+              options={[allFilterOption("All categories"), ...filterOptions.category]}
+            />
+          </div>
+
+          {/* 3. Payment Mode */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                Payment Mode
+              </label>
+              {filterPayment ? (
+                <button
+                  type="button"
+                  onClick={() => setFilterPayment("")}
+                  className="text-xs font-semibold text-rose-600 hover:underline"
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+            <SelectField
+              searchable
+              autoSelectWhenSingle={false}
+              value={filterPayment}
+              onChange={setFilterPayment}
+              placeholder="All payment modes"
+              options={[allFilterOption("All payment modes"), ...filterOptions.payment]}
+            />
+          </div>
+
+          {/* 4. Source Account (From) */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                Source Account (From)
+              </label>
+              {filterFrom ? (
+                <button
+                  type="button"
+                  onClick={() => setFilterFrom("")}
+                  className="text-xs font-semibold text-rose-600 hover:underline"
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+            <SelectField
+              searchable
+              autoSelectWhenSingle={false}
+              value={filterFrom}
+              onChange={setFilterFrom}
+              placeholder="All sources"
+              options={[allFilterOption("All sources"), ...filterOptions.from]}
+            />
+          </div>
+
+          {/* 5. Destination Account (To) */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                Destination (To)
+              </label>
+              {filterTo ? (
+                <button
+                  type="button"
+                  onClick={() => setFilterTo("")}
+                  className="text-xs font-semibold text-rose-600 hover:underline"
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+            <SelectField
+              searchable
+              autoSelectWhenSingle={false}
+              value={filterTo}
+              onChange={setFilterTo}
+              placeholder="All destinations"
+              options={[allFilterOption("All destinations"), ...filterOptions.to]}
+            />
+          </div>
+
+          {/* 6. District (if present) */}
+          {filterOptions.district.length > 0 ? (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                  District
+                </label>
+                {filterDistrict ? (
+                  <button
+                    type="button"
+                    onClick={() => setFilterDistrict("")}
+                    className="text-xs font-semibold text-rose-600 hover:underline"
+                  >
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+              <SelectField
+                searchable
+                autoSelectWhenSingle={false}
+                value={filterDistrict}
+                onChange={setFilterDistrict}
+                placeholder="All districts"
+                options={[allFilterOption("All districts"), ...filterOptions.district]}
+              />
+            </div>
+          ) : null}
+
+          {/* 7. Sort Order */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+              Sort Order
+            </label>
+            <SelectField
+              autoSelectWhenSingle={false}
+              value={`${sortKey}:${sortDir}`}
+              onChange={(val) => {
+                const [k, d] = val.split(":") as [LedgerSortKey, SortDir];
+                if (k && d) {
+                  setSortKey(k);
+                  setSortDir(d);
+                }
+              }}
+              placeholder="Sort by"
+              options={[
+                { value: "date:desc", label: "Date · Newest first" },
+                { value: "date:asc", label: "Date · Oldest first" },
+                { value: "amount:desc", label: "Amount · High to Low" },
+                { value: "amount:asc", label: "Amount · Low to High" },
+                { value: "journey:asc", label: "Journey · Low to High" },
+                { value: "journey:desc", label: "Journey · High to Low" },
+              ]}
+            />
+          </div>
+        </div>
+
+        {/* Sticky Apply Button with Live Result Count */}
+        <div className="border-t border-line bg-white/95 p-4 backdrop-blur-sm pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full rounded-2xl bg-[var(--brand)] py-3.5 text-center text-sm font-bold text-white shadow-lg active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+          >
+            <span>Show {filteredCount} {filteredCount === 1 ? "Transaction" : "Transactions"}</span>
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
