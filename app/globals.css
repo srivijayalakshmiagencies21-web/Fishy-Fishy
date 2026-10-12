@@ -427,16 +427,17 @@ input[type="number"]::-webkit-inner-spin-button {
   border-top: 1px solid var(--border);
 }
 
-.data-table .col-role { min-width: 11rem; width: 14rem; }
-.data-table .col-joined { min-width: 6.5rem; width: 8.5rem; white-space: nowrap; }
+.data-table .col-user { min-width: 8.5rem; width: 10rem; }
+.data-table .col-role { min-width: 10.5rem; width: 12rem; }
+.data-table .col-joined { min-width: 6.5rem; width: 7.5rem; white-space: nowrap; }
 .data-table .col-login {
-  min-width: 11.25rem;
-  width: 11.25rem;
+  min-width: 9.5rem;
+  width: 10.5rem;
   white-space: nowrap;
 }
 .data-table .col-action {
-  width: 1%;
   white-space: nowrap;
+  text-align: right;
 }
 
 .tab-panel {
@@ -1016,5 +1017,19 @@ input[type="number"]::-webkit-inner-spin-button {
   font-size: 0.875rem;
   color: var(--brand-dark);
   background: var(--brand-soft);
+}
+
+.finance-fab {
+  position: fixed;
+  z-index: 45;
+  right: 1.25rem;
+  bottom: calc(var(--bottom-nav-height, 4.25rem) + 1.25rem);
+}
+
+@media (min-width: 768px) {
+  .finance-fab {
+    right: 2rem;
+    bottom: 2rem;
+  }
 }
 

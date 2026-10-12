@@ -128,9 +128,10 @@ export function JourneySummaryCard({
   return (
     <section className="group rounded-2xl border border-slate-200/80 bg-white shadow-xs transition-all duration-200 hover:border-slate-300 hover:shadow-md overflow-hidden mb-4">
       {/* Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-3.5">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-1 text-xs font-extrabold tracking-wider text-white uppercase shadow-2xs">
+      <div className="flex flex-col gap-2.5 border-b border-slate-100 bg-slate-50/70 p-3.5 sm:px-5 sm:py-3.5">
+        {/* Row 1: Journey Name on Left, View Details / Hide Details on Right */}
+        <div className="flex w-full items-center justify-between gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-1 text-xs font-extrabold tracking-wider text-white uppercase shadow-2xs shrink-0">
             <svg
               viewBox="0 0 24 24"
               fill="none"
@@ -145,7 +146,33 @@ export function JourneySummaryCard({
             Journey #{journey.db_id ?? journey.id}
           </span>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={onToggleExpanded}
+              className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-2xs transition-all hover:border-slate-300 hover:bg-slate-50 cursor-pointer"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={`h-3.5 w-3.5 text-slate-500 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+              {expanded ? "Hide Details" : "View Details"}
+            </button>
+            {optionsMenu}
+          </div>
+        </div>
+
+        {/* Row 2: Status Badge (Closed / In Progress) beside Timestamp */}
+        {statusBadge || stageStamp ? (
+          <div className="flex items-center gap-2 flex-wrap text-xs">
+            {statusBadge}
             {stageStamp ? (
               <span
                 className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[0.7rem] font-semibold ${stageStamp.className}`}
@@ -154,36 +181,13 @@ export function JourneySummaryCard({
               </span>
             ) : null}
           </div>
-        </div>
-
-        <div className="flex items-center gap-2.5">
-          {statusBadge}
-          <button
-            type="button"
-            onClick={onToggleExpanded}
-            className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-2xs transition-all hover:border-slate-300 hover:bg-slate-50"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className={`h-3.5 w-3.5 text-slate-500 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
-            >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-            {expanded ? "Hide Details" : "View Details"}
-          </button>
-          {optionsMenu}
-        </div>
+        ) : null}
       </div>
 
       {/* Card Content - At a glance overview */}
-      <div className="p-5">
+      <div className="p-3.5 sm:p-5">
         {/* Route & Key Metrics Banner */}
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50 via-slate-50/80 to-indigo-50/40 p-3.5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50 via-slate-50/80 to-indigo-50/40 p-3 sm:p-3.5">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-100/70 text-indigo-700">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
@@ -207,8 +211,9 @@ export function JourneySummaryCard({
             <span className="font-extrabold text-indigo-700">{districtLoc}</span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200/80 bg-white px-3 py-1 font-bold text-slate-700 shadow-2xs">
+          {/* Truck Count and Quantity beside each other */}
+          <div className="flex items-center gap-2 text-xs shrink-0 whitespace-nowrap">
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200/80 bg-white px-2.5 sm:px-3 py-1 font-bold text-slate-700 shadow-2xs">
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -227,7 +232,7 @@ export function JourneySummaryCard({
             </span>
 
             {stageQty.value > 0 ? (
-              <span className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1 font-mono font-bold text-white shadow-2xs ${stageQty.className}`}>
+              <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 sm:px-3 py-1 font-mono font-bold text-white shadow-2xs ${stageQty.className}`}>
                 {stageQty.value.toLocaleString()} {stageQty.label}
               </span>
             ) : null}

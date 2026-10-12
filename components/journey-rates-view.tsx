@@ -394,10 +394,51 @@ type RateLineBindings = {
   onRateTextChange: (journeyId: string, lineKey: string, value: string) => void;
 };
 
-function JourneyRateCard({ record, ratesByLine, onRateChange }: { record: JourneyRateRecord; ratesByLine: Record<string, string>; onRateChange: (storageKey: string, value: string) => void }) {
+function JourneyRateCard({
+  record,
+  ratesByLine,
+  onRateChange,
+  isExpanded,
+  onToggle,
+}: {
+  record: JourneyRateRecord;
+  ratesByLine: Record<string, string>;
+  onRateChange: (storageKey: string, value: string) => void;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
   const supplierGroups = groupByLabel(record.suppliers, (line) => line.supplier);
   const nonLocalGroups = groupByLabel(record.nonLocalTransporters, (line) => line.transporter);
   const localGroups = groupByLabel(record.localTransporters, (line) => line.transporter);
+
+  const transporterCount = nonLocalGroups.length + localGroups.length;
+
+  const supplierTotal = supplierGroups.reduce((acc, g) => {
+    const linesTotal = supplierGroupTotal(record.journeyId, g.rows, ratesByLine);
+    const additional = parseChargeAmount(
+      ratesByLine[journeyRateStorageKey(record.journeyId, supplierAdditionalChargeKey(g.title))] ?? ""
+    );
+    return acc + linesTotal + additional;
+  }, 0);
+
+  const nonLocalTotal = nonLocalGroups.reduce((acc, g) => {
+    const linesTotal = transporterGroupTotal(record.journeyId, g.rows, ratesByLine);
+    const additional = parseChargeAmount(
+      ratesByLine[journeyRateStorageKey(record.journeyId, transporterAdditionalChargeKey("non-local", g.title))] ?? ""
+    );
+    return acc + linesTotal + additional;
+  }, 0);
+
+  const localTotal = localGroups.reduce((acc, g) => {
+    const linesTotal = transporterGroupTotal(record.journeyId, g.rows, ratesByLine);
+    const additional = parseChargeAmount(
+      ratesByLine[journeyRateStorageKey(record.journeyId, transporterAdditionalChargeKey("local", g.title))] ?? ""
+    );
+    return acc + linesTotal + additional;
+  }, 0);
+
+  const transporterTotal = nonLocalTotal + localTotal;
+  const journeyTotal = supplierTotal + transporterTotal;
 
   const lineRates: RateLineBindings = {
     rateTextFor: (journeyId, lineKey) => ratesByLine[journeyRateStorageKey(journeyId, lineKey)] ?? "",
@@ -406,11 +447,77 @@ function JourneyRateCard({ record, ratesByLine, onRateChange }: { record: Journe
   };
 
   return (
-    <article className="surface overflow-hidden">
-      <header className="border-b border-line bg-[var(--page)] px-4 py-3">
-        <h2 className="text-base font-bold text-blue-dark">Journey #{record.journeyNumber}</h2>
+    <article className="surface overflow-hidden rounded-2xl border border-line transition-all duration-200">
+      <header
+        className={`bg-[var(--page)] transition-colors hover:bg-slate-100/70 ${
+          isExpanded ? "border-b border-line" : ""
+        }`}
+      >
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={isExpanded}
+          className="flex w-full flex-col gap-2 p-3 sm:p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue cursor-pointer"
+        >
+          {/* Top Line: Title + Amount on Left, Arrow Mark on Right */}
+          <div className="flex w-full items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <h2 className="text-base font-bold text-blue-dark">
+                Journey #{record.journeyNumber}
+              </h2>
+
+              <span className="inline-flex items-center rounded-lg bg-blue-soft border border-blue/25 px-2.5 py-0.5 text-xs font-extrabold text-blue-dark tabular-nums shrink-0">
+                {formatAmount(journeyTotal)}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs font-semibold text-muted hidden sm:inline">
+                {isExpanded ? "Collapse" : "Expand"}
+              </span>
+              <div
+                className={`flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-white text-blue-dark transition-transform duration-200 shadow-2xs ${
+                  isExpanded ? "rotate-180 bg-blue-soft text-blue" : ""
+                }`}
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+                  <path d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          {/* Second Line: Supplier and Transporter Badges Side by Side (No wrapping) */}
+          {supplierGroups.length > 0 || transporterCount > 0 ? (
+            <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar max-w-full">
+              {supplierGroups.length > 0 ? (
+                <span className="inline-flex shrink-0 whitespace-nowrap items-center gap-1 rounded-md bg-rose-50 border border-rose-200 px-1.5 sm:px-2 py-0.5 text-[10.5px] sm:text-xs font-semibold text-rose-800">
+                  <span>
+                    {supplierGroups.length} {supplierGroups.length === 1 ? "Supplier" : "Suppliers"}
+                  </span>
+                  <span className="font-bold text-rose-950 tabular-nums">
+                    · {formatAmount(supplierTotal)}
+                  </span>
+                </span>
+              ) : null}
+
+              {transporterCount > 0 ? (
+                <span className="inline-flex shrink-0 whitespace-nowrap items-center gap-1 rounded-md bg-amber-50 border border-amber-200 px-1.5 sm:px-2 py-0.5 text-[10.5px] sm:text-xs font-semibold text-amber-900">
+                  <span>
+                    {transporterCount} {transporterCount === 1 ? "Transporter" : "Transporters"}
+                  </span>
+                  <span className="font-bold text-amber-950 tabular-nums">
+                    · {formatAmount(transporterTotal)}
+                  </span>
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+        </button>
       </header>
-      <div className="space-y-6 p-4">
+
+      {isExpanded ? (
+        <div className="space-y-6 p-4">
         <section className="space-y-3">
           <h3 className="text-center text-xs font-bold uppercase tracking-wider text-blue-dark sm:text-left">
             Supplier details (start point)
@@ -583,6 +690,7 @@ function JourneyRateCard({ record, ratesByLine, onRateChange }: { record: Journe
           empty="No local transporters on this journey."
         />
       </div>
+      ) : null}
     </article>
   );
 }
@@ -752,6 +860,7 @@ export function JourneyRatesView({
 }) {
   const [ratesByLine, setRatesByLine] = useState(initialRateTexts);
   const [syncedInitial, setSyncedInitial] = useState(initialRateTexts);
+  const [expandedJourneyIds, setExpandedJourneyIds] = useState<Record<string, boolean>>({});
 
   if (syncedInitial !== initialRateTexts) {
     setSyncedInitial(initialRateTexts);
@@ -760,6 +869,25 @@ export function JourneyRatesView({
 
   function setLineRate(storageKey: string, value: string) {
     setRatesByLine((current) => ({ ...current, [storageKey]: value }));
+  }
+
+  function toggleJourney(journeyId: string) {
+    setExpandedJourneyIds((prev) => ({
+      ...prev,
+      [journeyId]: !prev[journeyId],
+    }));
+  }
+
+  const allExpanded = rows.length > 0 && rows.every((r) => expandedJourneyIds[r.journeyId]);
+
+  function toggleAll() {
+    if (allExpanded) {
+      setExpandedJourneyIds({});
+    } else {
+      const next: Record<string, boolean> = {};
+      for (const r of rows) next[r.journeyId] = true;
+      setExpandedJourneyIds(next);
+    }
   }
 
   if (error) {
@@ -779,13 +907,30 @@ export function JourneyRatesView({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
+      {rows.length > 1 ? (
+        <div className="flex items-center justify-between gap-3 px-1">
+          <p className="text-xs font-semibold text-muted">
+            {rows.length} completed journeys
+          </p>
+          <button
+            type="button"
+            onClick={toggleAll}
+            className="text-xs font-bold text-blue hover:text-blue-dark transition-colors cursor-pointer"
+          >
+            {allExpanded ? "Collapse all" : "Expand all"}
+          </button>
+        </div>
+      ) : null}
+
       {rows.map((record) => (
         <JourneyRateCard
           key={record.journeyId}
           record={record}
           ratesByLine={ratesByLine}
           onRateChange={setLineRate}
+          isExpanded={Boolean(expandedJourneyIds[record.journeyId])}
+          onToggle={() => toggleJourney(record.journeyId)}
         />
       ))}
     </div>

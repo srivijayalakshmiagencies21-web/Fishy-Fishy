@@ -243,58 +243,100 @@ export function UserManagement({
 
   return (
     <div className="space-y-5">
-      <div className="flex justify-end">
-        {tab === "users" ? (
-          canManageRoles ? (
-            <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => setShowUserForm((open) => !open)}>
-              + Add user
-            </button>
-          ) : null
-        ) : (
-          <button type="button" className="btn-primary w-full sm:w-auto" onClick={toggleNewRoleForm}>
-            + Add role
-          </button>
-        )}
-      </div>
-
       {error ? <p className="rounded-xl bg-[var(--brand-soft)] px-4 py-3 text-sm font-medium text-[var(--brand-dark)]">{error}</p> : null}
 
       {tab === "users" ? (
         <div key="users" className="tab-panel space-y-5">
-          {showUserForm ? (
-            <form onSubmit={createUser} autoComplete="off" className="surface space-y-4 p-5">
-              <h2 className="text-base font-semibold">New user</h2>
-              <div className="grid gap-4 md:grid-cols-3">
-                <label>
-                  <span className="label">Username</span>
-                  <input className="input-field" required name="new-username" autoComplete="off" value={username} onChange={(event) => setUsername(event.target.value.split("@")[0].replace(/\s/g, ""))} placeholder="Enter username" />
-                </label>
-                <label>
-                  <span className="label">Password</span>
-                  <input className="input-field" required minLength={8} type="password" name="new-password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Min 8 characters" />
-                </label>
-                <label>
-                  <span className="label">Role</span>
-                  {visibleRoles.length > 0 ? (
-                    <SelectField
-                      key={visibleRoles.map((role) => role.id).join()}
-                      name="role_id"
-                      required
-                      defaultValue={roleId}
-                      onChange={setRoleId}
-                      options={visibleRoles.map((role) => ({ value: role.id, label: role.name }))}
-                    />
-                  ) : (
-                    <p className="text-sm text-[var(--text-secondary)]">Loading roles…</p>
-                  )}
-                </label>
-              </div>
-              <div className="flex justify-end">
-                <button type="submit" className="btn-primary" disabled={saving || !roleId}>
-                  {saving ? "Saving…" : "Save user"}
+          {canManageRoles ? (
+            !showUserForm ? (
+              <div>
+                <button
+                  type="button"
+                  className="btn-primary w-full sm:w-auto"
+                  onClick={() => setShowUserForm(true)}
+                >
+                  + Add user
                 </button>
               </div>
-            </form>
+            ) : (
+              <section className="surface p-4 sm:p-5">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h2 className="text-base font-semibold">Add user</h2>
+                  <button
+                    type="button"
+                    className="btn-quiet !min-h-0 !px-0 text-sm"
+                    onClick={() => {
+                      setShowUserForm(false);
+                      setUsername("");
+                      setPassword("");
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <form onSubmit={createUser} autoComplete="off" className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <label>
+                      <span className="label">Username</span>
+                      <input
+                        className="input-field"
+                        required
+                        name="new-username"
+                        autoComplete="off"
+                        value={username}
+                        onChange={(event) => setUsername(event.target.value.split("@")[0].replace(/\s/g, ""))}
+                        placeholder="Enter username"
+                      />
+                    </label>
+                    <label>
+                      <span className="label">Password</span>
+                      <input
+                        className="input-field"
+                        required
+                        minLength={8}
+                        type="password"
+                        name="new-password"
+                        autoComplete="new-password"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        placeholder="Min 8 characters"
+                      />
+                    </label>
+                    <label>
+                      <span className="label">Role</span>
+                      {visibleRoles.length > 0 ? (
+                        <SelectField
+                          key={visibleRoles.map((role) => role.id).join()}
+                          name="role_id"
+                          required
+                          defaultValue={roleId}
+                          onChange={setRoleId}
+                          options={visibleRoles.map((role) => ({ value: role.id, label: role.name }))}
+                        />
+                      ) : (
+                        <p className="text-sm text-[var(--text-secondary)]">Loading roles…</p>
+                      )}
+                    </label>
+                  </div>
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      className="btn-quiet"
+                      onClick={() => {
+                        setShowUserForm(false);
+                        setUsername("");
+                        setPassword("");
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button type="submit" className="btn-primary" disabled={saving || !roleId}>
+                      {saving ? "Saving…" : "Save user"}
+                    </button>
+                  </div>
+                </form>
+              </section>
+            )
           ) : null}
 
           {loading ? (
@@ -482,14 +524,14 @@ export function UserManagement({
               {/* Desktop Table View */}
               <section className="surface data-card hidden md:block">
                 <div className="w-full overflow-x-auto">
-                  <table className="data-table min-w-[42rem]">
+                  <table className="data-table min-w-full">
                     <thead>
                       <tr>
-                        <th>User</th>
+                        <th className="col-user">User</th>
                         <th className="col-role">Role</th>
                         <th className="col-joined">Joined</th>
                         <th className="col-login">Last login</th>
-                        <th className="col-action" />
+                        <th className="col-action text-right" />
                       </tr>
                     </thead>
                     <tbody>
@@ -500,26 +542,28 @@ export function UserManagement({
 
                         return (
                           <tr key={user.user_id}>
-                            <td className="font-medium">{displayName(user.email)}</td>
-                            <td>
+                            <td className="col-user font-medium">{displayName(user.email)}</td>
+                            <td className="col-role">
                               {canManageRoles ? (
-                                <SelectField
-                                  compact
-                                  name={`role-${user.user_id}`}
-                                  value={user.role_id ?? roles[0]?.id ?? ""}
-                                  defaultValue={user.role_id ?? roles[0]?.id ?? ""}
-                                  onChange={(nextRoleId) => assignRole(user.user_id, nextRoleId)}
-                                  options={visibleRoles.map((role) => ({ value: role.id, label: role.name }))}
-                                />
+                                <div className="w-40">
+                                  <SelectField
+                                    compact
+                                    name={`role-${user.user_id}`}
+                                    value={user.role_id ?? roles[0]?.id ?? ""}
+                                    defaultValue={user.role_id ?? roles[0]?.id ?? ""}
+                                    onChange={(nextRoleId) => assignRole(user.user_id, nextRoleId)}
+                                    options={visibleRoles.map((role) => ({ value: role.id, label: role.name }))}
+                                  />
+                                </div>
                               ) : (
                                 <span>{user.role_name ?? "No role"}</span>
                               )}
                             </td>
-                            <td className="text-[var(--text-secondary)]" suppressHydrationWarning>{new Date(user.created_at).toLocaleDateString()}</td>
+                            <td className="col-joined text-[var(--text-secondary)]" suppressHydrationWarning>{new Date(user.created_at).toLocaleDateString()}</td>
                             <td className="col-login text-[var(--text-secondary)]" suppressHydrationWarning>{formatLoggedIn(user.last_sign_in_at)}</td>
-                            <td className="col-action">
+                            <td className="col-action text-right">
                               {resetUserId === user.user_id ? (
-                                <form onSubmit={(event) => resetPassword(event, user.user_id)} className="flex items-center gap-2">
+                                <form onSubmit={(event) => resetPassword(event, user.user_id)} className="flex items-center justify-end gap-2">
                                   <input
                                     className="input-field input-inline"
                                     type="password"
@@ -545,7 +589,7 @@ export function UserManagement({
                                   </button>
                                 </form>
                               ) : confirmUserId === user.user_id ? (
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center justify-end gap-2">
                                   <span className="text-sm text-[var(--text-secondary)]">Remove {displayName(user.email)}?</span>
                                   <button type="button" className="pill pill-red" disabled={saving} onClick={() => removeUser(user.user_id)}>
                                     {saving ? "Removing…" : "Remove"}
@@ -555,7 +599,7 @@ export function UserManagement({
                                   </button>
                                 </div>
                               ) : (
-                                <div className="flex items-center justify-start gap-2">
+                                <div className="flex items-center justify-end gap-2">
                                   {user.active ? null : <span className="text-xs font-semibold tracking-wide text-[var(--text-muted)] uppercase">Inactive</span>}
                                   {canReset ? (
                                     <button
@@ -603,45 +647,93 @@ export function UserManagement({
         </div>
       ) : (
         <div key="roles" className="tab-panel space-y-5">
-          {showRoleForm ? (
-            <form onSubmit={saveRole} className="surface space-y-4 p-5">
-              <h2 className="text-base font-semibold">{editingRoleId ? "Edit role" : "New role"}</h2>
-              <label className="block max-w-sm">
-                <span className="label">Role name</span>
-                <input className="input-field" required value={roleName} onChange={(event) => setRoleName(event.target.value)} placeholder="Supervisor" />
-              </label>
-              <fieldset>
-                <legend className="label">Allowed pages</legend>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {appPages.map((page) => {
-                    const selected = rolePages.includes(page.key);
-                    return (
-                      <label
-                        key={page.key}
-                        className={[
-                          "flex min-h-[2.75rem] cursor-pointer items-center gap-3 rounded-xl border px-3 py-3",
-                          selected ? "border-[var(--brand)] bg-[var(--brand-soft)]" : "border-[var(--border)]",
-                        ].join(" ")}
-                      >
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 shrink-0 accent-[var(--brand)]"
-                          checked={selected}
-                          onChange={() => toggleRolePage(page.key)}
-                        />
-                        <span className="text-sm font-medium">{page.label}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </fieldset>
-              <div className="flex justify-end">
-                <button type="submit" className="btn-primary" disabled={saving || rolePages.length === 0}>
-                  {saving ? "Saving…" : "Save role"}
+          {!showRoleForm ? (
+            <div>
+              <button
+                type="button"
+                className="btn-primary w-full sm:w-auto"
+                onClick={toggleNewRoleForm}
+              >
+                + Add role
+              </button>
+            </div>
+          ) : (
+            <section className="surface p-4 sm:p-5">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="text-base font-semibold">{editingRoleId ? "Edit role" : "Add role"}</h2>
+                <button
+                  type="button"
+                  className="btn-quiet !min-h-0 !px-0 text-sm"
+                  onClick={() => {
+                    setShowRoleForm(false);
+                    setEditingRoleId(null);
+                    setRoleName("");
+                    setRolePages([]);
+                  }}
+                >
+                  Cancel
                 </button>
               </div>
-            </form>
-          ) : null}
+              <form onSubmit={saveRole} className="space-y-4">
+                <label className="block max-w-sm">
+                  <span className="label">Role name</span>
+                  <input
+                    className="input-field"
+                    required
+                    value={roleName}
+                    onChange={(event) => setRoleName(event.target.value)}
+                    placeholder="Supervisor"
+                  />
+                </label>
+                <fieldset>
+                  <legend className="label">Allowed pages</legend>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {appPages.map((page) => {
+                      const selected = rolePages.includes(page.key);
+                      return (
+                        <label
+                          key={page.key}
+                          className={[
+                            "flex min-h-[2.75rem] cursor-pointer items-center gap-3 rounded-xl border px-3 py-3",
+                            selected ? "border-[var(--brand)] bg-[var(--brand-soft)]" : "border-[var(--border)]",
+                          ].join(" ")}
+                        >
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 shrink-0 accent-[var(--brand)]"
+                            checked={selected}
+                            onChange={() => toggleRolePage(page.key)}
+                          />
+                          <span className="text-sm font-medium">{page.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    className="btn-quiet"
+                    onClick={() => {
+                      setShowRoleForm(false);
+                      setEditingRoleId(null);
+                      setRoleName("");
+                      setRolePages([]);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-primary"
+                    disabled={saving || rolePages.length === 0}
+                  >
+                    {saving ? "Saving…" : "Save role"}
+                  </button>
+                </div>
+              </form>
+            </section>
+          )}
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {visibleRoles.map((role) => (

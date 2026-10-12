@@ -389,73 +389,77 @@ export function TransactionsView({
 
       <section className="surface overflow-hidden">
         {/* Mobile Filter & Sort Bar (md:hidden) */}
-        <div className="flex items-center justify-between gap-2 border-b border-line bg-[var(--page)] p-3 md:hidden">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            {/* Sort Order Dropdown */}
-            <div className="min-w-[130px] max-w-[170px] flex-1">
-              <SelectField
-                compact
-                autoSelectWhenSingle={false}
-                value={`${sortKey}:${sortDir}`}
-                onChange={(val) => {
-                  const [k, d] = val.split(":") as [LedgerSortKey, SortDir];
-                  if (k && d) {
-                    setSortKey(k);
-                    setSortDir(d);
-                  }
-                }}
-                placeholder="Sort by"
-                options={[
-                  { value: "date:desc", label: "Date · Newest" },
-                  { value: "date:asc", label: "Date · Oldest" },
-                  { value: "amount:desc", label: "Amount · High → Low" },
-                  { value: "amount:asc", label: "Amount · Low → High" },
-                  { value: "journey:asc", label: "Journey · Low → High" },
-                  { value: "journey:desc", label: "Journey · High → Low" },
-                ]}
-              />
-            </div>
-
-            {/* Filters Button */}
-            <button
-              type="button"
-              onClick={() => setFilterSheetOpen(true)}
-              className={`flex h-[38px] shrink-0 items-center gap-1.5 px-3 rounded-[10px] border text-xs font-semibold transition-all shadow-xs ${
-                secondaryFilterCount > 0
-                  ? "border-[var(--brand)] bg-blue-soft text-blue-dark font-bold ring-1 ring-[var(--brand)]/30"
-                  : "border-line bg-white text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2">
-                <line x1="4" y1="21" x2="4" y2="14" />
-                <line x1="4" y1="10" x2="4" y2="3" />
-                <line x1="12" y1="21" x2="12" y2="12" />
-                <line x1="12" y1="8" x2="12" y2="3" />
-                <line x1="20" y1="21" x2="20" y2="16" />
-                <line x1="20" y1="12" x2="20" y2="3" />
-                <line x1="1" y1="14" x2="7" y2="14" />
-                <line x1="9" y1="8" x2="15" y2="8" />
-                <line x1="17" y1="16" x2="23" y2="16" />
-              </svg>
-              <span>Filters</span>
-              {secondaryFilterCount > 0 ? (
-                <span className="flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-[var(--brand)] px-1 text-[10px] font-bold text-white">
-                  {secondaryFilterCount}
-                </span>
-              ) : null}
-            </button>
+        <div className="flex items-center justify-between gap-1.5 border-b border-line bg-[var(--page)] p-2.5 md:hidden">
+          {/* Sorting Badges */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+            {([
+              { key: "date", label: "Date" },
+              { key: "amount", label: "Amt" },
+              { key: "journey", label: "Jrny" },
+            ] as const).map((opt) => {
+              const isActive = sortKey === opt.key;
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => toggleSort(opt.key)}
+                  className={`flex h-8 shrink-0 items-center gap-1 rounded-full border px-2.5 text-xs transition-all cursor-pointer ${
+                    isActive
+                      ? "border-[var(--brand)] bg-blue-soft text-blue-dark font-bold ring-1 ring-[var(--brand)]/30 shadow-xs"
+                      : "border-line bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium"
+                  }`}
+                  aria-pressed={isActive}
+                  title={`Sort by ${opt.label} (${isActive ? (sortDir === "asc" ? "ascending" : "descending") : "click to sort"})`}
+                >
+                  <span>{opt.label}</span>
+                  {isActive ? (
+                    sortDir === "asc" ? (
+                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 stroke-[2.5]" fill="none" stroke="currentColor">
+                        <polyline points="18 15 12 9 6 15" />
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 stroke-[2.5]" fill="none" stroke="currentColor">
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    )
+                  ) : (
+                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-slate-400 stroke-[2]" fill="none" stroke="currentColor">
+                      <polyline points="7 15 12 20 17 15" />
+                      <polyline points="7 9 12 4 17 9" />
+                    </svg>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
-          {/* Add Transaction Button */}
+          {/* Filters Button */}
           <button
             type="button"
-            className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] bg-[var(--brand)] text-white shadow-sm hover:opacity-90 active:scale-95 transition-transform"
-            aria-label="New transaction"
-            onClick={() => setFormOpen(true)}
+            onClick={() => setFilterSheetOpen(true)}
+            className={`flex h-8 shrink-0 items-center gap-1.5 px-3 rounded-full border text-xs font-semibold transition-all shadow-xs ml-auto cursor-pointer ${
+              secondaryFilterCount > 0
+                ? "border-[var(--brand)] bg-blue-soft text-blue-dark font-bold ring-1 ring-[var(--brand)]/30"
+                : "border-line bg-white text-slate-700 hover:bg-slate-50"
+            }`}
           >
-            <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden>
-              <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <line x1="4" y1="21" x2="4" y2="14" />
+              <line x1="4" y1="10" x2="4" y2="3" />
+              <line x1="12" y1="21" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12" y2="3" />
+              <line x1="20" y1="21" x2="20" y2="16" />
+              <line x1="20" y1="12" x2="20" y2="3" />
+              <line x1="1" y1="14" x2="7" y2="14" />
+              <line x1="9" y1="8" x2="15" y2="8" />
+              <line x1="17" y1="16" x2="23" y2="16" />
             </svg>
+            <span>Filters</span>
+            {secondaryFilterCount > 0 ? (
+              <span className="flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-[var(--brand)] px-1 text-[10px] font-bold text-white">
+                {secondaryFilterCount}
+              </span>
+            ) : null}
           </button>
         </div>
 
@@ -546,12 +550,14 @@ export function TransactionsView({
             ) : null}
             <button
               type="button"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--brand)] text-white hover:opacity-90 shadow-sm"
-              aria-label="New transaction"
               onClick={() => setFormOpen(true)}
+              className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--brand)] text-white shadow-xs hover:bg-[var(--brand-dark)] hover:scale-105 active:scale-95 transition-all cursor-pointer"
+              title="New transaction"
+              aria-label="New transaction"
             >
-              <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden>
-                <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
             </button>
           </div>
@@ -574,8 +580,8 @@ export function TransactionsView({
                 ? "Try resetting filters or adjusting search parameters to see more entries."
                 : "Tap the + button to record your first transaction."}
             </p>
-            <div className="mt-4 flex items-center justify-center gap-2">
-              {hasActiveFilters ? (
+            {hasActiveFilters ? (
+              <div className="mt-4 flex items-center justify-center">
                 <button
                   type="button"
                   onClick={clearFilters}
@@ -583,15 +589,8 @@ export function TransactionsView({
                 >
                   Reset filters
                 </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setFormOpen(true)}
-                className="btn-primary px-3 py-1.5 text-xs font-semibold"
-              >
-                + New transaction
-              </button>
-            </div>
+              </div>
+            ) : null}
           </div>
         ) : (
           <>
@@ -733,6 +732,20 @@ export function TransactionsView({
         )}
       </section>
 
+      {/* Floating Action Button (Freezed in bottom corner on mobile, above tabbar) */}
+      <button
+        type="button"
+        onClick={() => setFormOpen(true)}
+        className="finance-fab md:hidden flex h-11 w-11 items-center justify-center rounded-full bg-[var(--brand)] text-white shadow-xl hover:opacity-95 hover:scale-105 active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue/30 cursor-pointer"
+        aria-label="New transaction"
+        title="New transaction"
+      >
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+      </button>
+
       {filterSheetOpen ? (
         <MobileFilterSheet
           isOpen={filterSheetOpen}
@@ -749,10 +762,6 @@ export function TransactionsView({
           setFilterPayment={setFilterPayment}
           filterDistrict={filterDistrict}
           setFilterDistrict={setFilterDistrict}
-          sortKey={sortKey}
-          setSortKey={setSortKey}
-          sortDir={sortDir}
-          setSortDir={setSortDir}
           filterOptions={filterOptions}
           typeCounts={typeCounts}
           filteredCount={filteredRows.length}
@@ -793,10 +802,6 @@ function MobileFilterSheet({
   setFilterPayment,
   filterDistrict,
   setFilterDistrict,
-  sortKey,
-  setSortKey,
-  sortDir,
-  setSortDir,
   filterOptions,
   typeCounts,
   filteredCount,
@@ -817,10 +822,6 @@ function MobileFilterSheet({
   setFilterPayment: (val: string) => void;
   filterDistrict: string;
   setFilterDistrict: (val: string) => void;
-  sortKey: LedgerSortKey;
-  setSortKey: (val: LedgerSortKey) => void;
-  sortDir: SortDir;
-  setSortDir: (val: SortDir) => void;
   filterOptions: {
     category: { value: string; label: string }[];
     from: { value: string; label: string }[];
@@ -846,22 +847,19 @@ function MobileFilterSheet({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-3xl border-t border-line bg-white shadow-2xl"
+        className="relative flex max-h-[min(90vh,740px)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-2xl transition-all"
         role="dialog"
         aria-modal="true"
         aria-labelledby="mobile-filters-title"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Grab Handle */}
-        <div className="mx-auto my-2.5 h-1.5 w-12 rounded-full bg-slate-300 shrink-0" />
-
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-4">
           <div>
             <h2 id="mobile-filters-title" className="text-base font-bold text-blue-dark">
               Filters
@@ -875,7 +873,7 @@ function MobileFilterSheet({
               <button
                 type="button"
                 onClick={onReset}
-                className="rounded-lg bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-100 active:opacity-75"
+                className="rounded-lg bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-100 active:opacity-75 cursor-pointer"
               >
                 Reset all
               </button>
@@ -883,10 +881,10 @@ function MobileFilterSheet({
             <button
               type="button"
               onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
+              className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-pointer"
               aria-label="Close filters"
             >
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
@@ -1058,40 +1056,14 @@ function MobileFilterSheet({
             </div>
           ) : null}
 
-          {/* 7. Sort Order */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
-              Sort Order
-            </label>
-            <SelectField
-              autoSelectWhenSingle={false}
-              value={`${sortKey}:${sortDir}`}
-              onChange={(val) => {
-                const [k, d] = val.split(":") as [LedgerSortKey, SortDir];
-                if (k && d) {
-                  setSortKey(k);
-                  setSortDir(d);
-                }
-              }}
-              placeholder="Sort by"
-              options={[
-                { value: "date:desc", label: "Date · Newest first" },
-                { value: "date:asc", label: "Date · Oldest first" },
-                { value: "amount:desc", label: "Amount · High to Low" },
-                { value: "amount:asc", label: "Amount · Low to High" },
-                { value: "journey:asc", label: "Journey · Low to High" },
-                { value: "journey:desc", label: "Journey · High to Low" },
-              ]}
-            />
-          </div>
         </div>
 
         {/* Sticky Apply Button with Live Result Count */}
-        <div className="border-t border-line bg-white/95 p-4 backdrop-blur-sm pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="border-t border-line bg-white p-4 shrink-0">
           <button
             type="button"
             onClick={onClose}
-            className="w-full rounded-2xl bg-[var(--brand)] py-3.5 text-center text-sm font-bold text-white shadow-lg active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+            className="w-full rounded-xl bg-[var(--brand)] py-3 text-center text-sm font-bold text-white shadow-md hover:opacity-95 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             <span>Show {filteredCount} {filteredCount === 1 ? "Transaction" : "Transactions"}</span>
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -1299,21 +1271,32 @@ function NewTransactionModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-blue-dark/40 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="flex max-h-[min(92dvh,720px)] w-full flex-col overflow-hidden rounded-t-2xl border border-line bg-white shadow-xl sm:max-w-lg sm:rounded-2xl"
+        className="relative flex max-h-[min(90vh,740px)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-2xl transition-all"
         role="dialog"
         aria-modal="true"
         aria-labelledby="new-transaction-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="shrink-0 border-b border-line bg-white px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-line bg-white px-5 py-4">
           <h2 id="new-transaction-title" className="text-lg font-bold text-blue-dark">
             New transaction
           </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-pointer"
+            aria-label="Close dialog"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
         </div>
         <form key={formKey} action={formAction} className="flex min-h-0 flex-1 flex-col">
           <input type="hidden" name="category_scope" value={categoryScope} />

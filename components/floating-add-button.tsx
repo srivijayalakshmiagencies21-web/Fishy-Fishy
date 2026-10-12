@@ -36,7 +36,7 @@ export function FloatingAddButton({
       disabled={disabled}
       title={title}
       aria-label={ariaLabel}
-      className={`fixed z-[45] flex h-12 w-12 items-center justify-center rounded-full border text-white shadow-lg transition-transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 right-4 md:bottom-8 md:right-8 ${bottomClass} ${variantStyles[variant]}`}
+      className={`fixed z-[45] md:hidden flex h-12 w-12 items-center justify-center rounded-full border text-white shadow-lg transition-transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 right-4 ${bottomClass} ${variantStyles[variant]}`}
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6" aria-hidden>
         <line x1="12" y1="5" x2="12" y2="19" />

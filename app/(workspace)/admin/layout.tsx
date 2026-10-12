@@ -18,7 +18,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const directory = await loadDirectory();
 
   return (
-    <>
+    <div className="mx-auto max-w-5xl pb-12">
       <UserManagement
         currentUserId={user.id}
         actorRole={user.role}
@@ -28,6 +28,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         initialError={directory.error}
       />
       {children}
-    </>
+    </div>
   );
 }
