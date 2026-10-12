@@ -1251,7 +1251,6 @@ function TransferJourneyForm({
   onCancel: () => void;
   onSubmitSuccess: () => void;
 }) {
-  const router = useRouter();
   const [state, formAction, pending] = useActionState(recordTransfer, null);
   const odometerFilesRef = useRef(new Map<string, File>());
   const allPrimaries = startPrimaryEntries(journey);
@@ -1389,9 +1388,8 @@ function TransferJourneyForm({
     if (state?.success) {
       onSubmitSuccess();
       onCancel();
-      startTransition(() => router.refresh());
     }
-  }, [state, onCancel, onSubmitSuccess, router]);
+  }, [state, onCancel, onSubmitSuccess]);
 
   const secondariesFor = (primaryTruckId: string) => draft.secondariesByPrimary[primaryTruckId] ?? [];
 

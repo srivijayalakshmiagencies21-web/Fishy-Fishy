@@ -23,7 +23,15 @@ export async function createJourney(state: unknown, formData: FormData) {
     return { success: false, error: "Driver mobile must be a 10-digit number." };
   }
 
+  const missingOdometer = (trucks ?? []).some(
+    (truck: any) => !truck.existingOdometerImagePath && !formDataFile(formData, `odometer_image_${truck.id}`),
+  );
+  if (missingOdometer) {
+    return { success: false, error: "Odometer capture is required for each truck." };
+  }
+
   let journeyId = db_id;
+  let journeyNumber: number;
 
   if (db_id) {
     const { data: journeyRow, error: journeyFetchError } = await supabase
@@ -40,28 +48,16 @@ export async function createJourney(state: unknown, formData: FormData) {
       };
     }
 
-    const { data: startTrucks, error: startTrucksError } = await supabase
-      .from("journey_trucks" as any)
-      .select("id")
-      .eq("journey_id", db_id)
-      .is("primary_truck_id", null);
-
-    if (startTrucksError) return { success: false, error: startTrucksError.message };
-
-    const startTruckIds = (startTrucks ?? []).map((row: any) => row.id as string);
-    if (startTruckIds.length > 0) {
-      const { error: removeItemsError } = await supabase
-        .from("truck_items" as any)
-        .delete()
-        .in("truck_id", startTruckIds);
-      if (removeItemsError) return { success: false, error: removeItemsError.message };
-
-      const { error: removeTrucksError } = await supabase
+    const [{ error: removeTrucksError }, number] = await Promise.all([
+      supabase
         .from("journey_trucks" as any)
         .delete()
-        .in("id", startTruckIds);
-      if (removeTrucksError) return { success: false, error: removeTrucksError.message };
-    }
+        .eq("journey_id", db_id)
+        .is("primary_truck_id", null),
+      resolveJourneyNumber(supabase, db_id),
+    ]);
+    if (removeTrucksError) return { success: false, error: removeTrucksError.message };
+    journeyNumber = number;
   } else {
     const res = await supabase.from("journeys").insert({
        phase: JourneyPhase.Start,
@@ -69,11 +65,12 @@ export async function createJourney(state: unknown, formData: FormData) {
     
     if (res.error) return { success: false, error: "Failed to create journey: " + res.error.message };
     journeyId = res.data.id;
+    journeyNumber = await resolveJourneyNumber(supabase, journeyId!);
   }
 
-  const journeyNumber = await resolveJourneyNumber(supabase, journeyId!);
+  const savedAtBaseMs = Date.now();
 
-  const uploadedPaths = await Promise.all(
+  const truckSaveResults = await Promise.all(
     trucks.map(async (truck: any, truckIndex: number) => {
       let odometer_image_path: string | null = truck.existingOdometerImagePath ?? null;
       const odometer_image = formDataFile(formData, `odometer_image_${truck.id}`);
@@ -88,20 +85,11 @@ export async function createJourney(state: unknown, formData: FormData) {
         });
         odometer_image_path = await uploadOdometerImageStored(supabase, odometer_image, objectPath);
       }
-      return odometer_image_path;
-    })
-  );
-
-  const truckSaveResults = await Promise.all(
-    trucks.map(async (truck: any, truckIndex: number) => {
-      const odometer_image_path = uploadedPaths[truckIndex];
-
-      if (!odometer_image_path) {
-        return { error: "Odometer capture is required for each truck." };
-      }
 
       const resTruck = await supabase.from("journey_trucks" as any).insert({
         journey_id: journeyId,
+        // Truck numbering (PT1, PT2, …) follows created_at, so pin it to form order.
+        created_at: new Date(savedAtBaseMs + truckIndex).toISOString(),
         location_name: route.location_name,
         district_id: route.district_id,
         transporter_id: truck.transporter_id,

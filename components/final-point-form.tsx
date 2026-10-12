@@ -1261,7 +1261,6 @@ function UnloadJourneyForm({
   onCancel: () => void;
   onSubmitSuccess: () => void;
 }) {
-  const router = useRouter();
   const [state, formAction, pending] = useActionState(recordUnload, null);
   const [clientError, setClientError] = useState<string | null>(null);
   const odometerFilesRef = useRef(new Map<string, File>());
@@ -1321,10 +1320,9 @@ function UnloadJourneyForm({
   useEffect(() => {
     if (state?.success) {
       onSubmitSuccess();
-      router.refresh();
       onCancel();
     }
-  }, [state, onCancel, onSubmitSuccess, router]);
+  }, [state, onCancel, onSubmitSuccess]);
 
   const allTrucksComplete =
     unloadTrucks.length > 0 &&

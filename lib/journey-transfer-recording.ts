@@ -1,6 +1,5 @@
 import type { JourneySummary } from "@/lib/journey-cards";
 import { JourneyPhase, normalizeJourneyPhase } from "@/lib/journey-phase";
-import { startPrimaryTrucks } from "@/lib/journey-truck-labels";
 
 export function isTransferPointOdometerPath(path?: string | null) {
   return Boolean(path && /\/TP\//.test(path));
@@ -12,17 +11,9 @@ export function hasPersistedTransferRecording(journey: JourneySummary): boolean 
   if (phase === JourneyPhase.Final || phase === JourneyPhase.Closed) return true;
   if (phase !== JourneyPhase.Transfer) return false;
 
-  if ((journey.trucks ?? []).some((truck) => truck.primary_truck_id)) return true;
+  // `transfer_at` is set by the transfer submit and cleared when the recording is deleted.
+  if (journey.transferTime) return true;
 
-  for (const truck of startPrimaryTrucks(journey)) {
-    if (
-      truck.transfer_odometer_image_path ||
-      truck.transfer_odometer_reading != null ||
-      isTransferPointOdometerPath(truck.odometer_image_path as string | undefined)
-    ) {
-      return true;
-    }
-  }
-
-  return false;
+  // Journeys recorded before `transfer_at` existed: secondaries only exist after a transfer submit.
+  return (journey.trucks ?? []).some((truck) => truck.primary_truck_id);
 }

@@ -57,7 +57,7 @@ export function UserManagement({
   const [password, setPassword] = useState("");
   const [roleId, setRoleId] = useState(() => defaultRoleId(initialRoles));
   const [roleName, setRoleName] = useState("");
-  const [rolePages, setRolePages] = useState<string[]>(["masters"]);
+  const [rolePages, setRolePages] = useState<string[]>([]);
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [resetUserId, setResetUserId] = useState<string | null>(null);
@@ -194,7 +194,7 @@ export function UserManagement({
     setShowRoleForm(false);
     setEditingRoleId(null);
     setRoleName("");
-    setRolePages(["masters"]);
+    setRolePages([]);
     await load();
   }
 
@@ -228,9 +228,17 @@ export function UserManagement({
     } else {
       setEditingRoleId(null);
       setRoleName("");
-      setRolePages(["masters"]);
+      setRolePages([]);
     }
     setShowRoleForm(true);
+  }
+
+  function toggleNewRoleForm() {
+    if (showRoleForm && !editingRoleId) {
+      setShowRoleForm(false);
+      return;
+    }
+    openRoleForm();
   }
 
   return (
@@ -238,13 +246,13 @@ export function UserManagement({
       <div className="flex justify-end">
         {tab === "users" ? (
           canManageRoles ? (
-            <button type="button" className="btn-primary" onClick={() => setShowUserForm((open) => !open)}>
-              Add user
+            <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => setShowUserForm((open) => !open)}>
+              + Add user
             </button>
           ) : null
         ) : (
-          <button type="button" className="btn-primary" onClick={() => openRoleForm()}>
-            Create role
+          <button type="button" className="btn-primary w-full sm:w-auto" onClick={toggleNewRoleForm}>
+            + Add role
           </button>
         )}
       </div>
@@ -254,16 +262,16 @@ export function UserManagement({
       {tab === "users" ? (
         <div key="users" className="tab-panel space-y-5">
           {showUserForm ? (
-            <form onSubmit={createUser} className="surface space-y-4 p-5">
+            <form onSubmit={createUser} autoComplete="off" className="surface space-y-4 p-5">
               <h2 className="text-base font-semibold">New user</h2>
               <div className="grid gap-4 md:grid-cols-3">
                 <label>
                   <span className="label">Username</span>
-                  <input className="input-field" required value={username} onChange={(event) => setUsername(event.target.value.split("@")[0].replace(/\s/g, ""))} placeholder="rahul" />
+                  <input className="input-field" required name="new-username" autoComplete="off" value={username} onChange={(event) => setUsername(event.target.value.split("@")[0].replace(/\s/g, ""))} placeholder="Enter username" />
                 </label>
                 <label>
                   <span className="label">Password</span>
-                  <input className="input-field" required minLength={8} type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Min 8 characters" />
+                  <input className="input-field" required minLength={8} type="password" name="new-password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Min 8 characters" />
                 </label>
                 <label>
                   <span className="label">Role</span>
@@ -283,7 +291,7 @@ export function UserManagement({
               </div>
               <div className="flex justify-end">
                 <button type="submit" className="btn-primary" disabled={saving || !roleId}>
-                  {saving ? "Saving…" : "Create user"}
+                  {saving ? "Saving…" : "Save user"}
                 </button>
               </div>
             </form>
@@ -381,6 +389,7 @@ export function UserManagement({
                             <input
                               className="input-field min-w-0 flex-1"
                               type="password"
+                              autoComplete="new-password"
                               required
                               minLength={8}
                               value={nextPassword}
@@ -514,6 +523,7 @@ export function UserManagement({
                                   <input
                                     className="input-field input-inline"
                                     type="password"
+                                    autoComplete="new-password"
                                     required
                                     minLength={8}
                                     value={nextPassword}

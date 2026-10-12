@@ -26,18 +26,19 @@ type Stop = {
   position: number;
 };
 
+/** Stop index the journey is at; a `.5` value means on the road between two stops. */
 function phaseProgressIndex(
   phase: JourneyPhaseValue,
   skip: boolean,
   transferRecorded: boolean,
 ) {
   if (skip) {
-    if (phase === JourneyPhase.Start || phase === JourneyPhase.Transfer) return 0;
+    if (phase === JourneyPhase.Start || phase === JourneyPhase.Transfer) return 0.5;
     if (phase === JourneyPhase.Final) return 1;
     return 2;
   }
-  if (phase === JourneyPhase.Start) return 0;
-  if (phase === JourneyPhase.Transfer) return transferRecorded ? 2 : 1;
+  if (phase === JourneyPhase.Start) return 0.5;
+  if (phase === JourneyPhase.Transfer) return transferRecorded ? 1.5 : 1;
   if (phase === JourneyPhase.Final) return 2;
   return 3;
 }
@@ -258,7 +259,7 @@ function JourneyTrack({
                 <p className="mt-0.5 text-[10px] font-medium tabular-nums text-gray-400">{trucksLabel}</p>
               ) : null}
               {stop.status === "active" ? (
-                <p className="mt-0.5 text-[10px] font-semibold text-blue-500 uppercase tracking-wide">In progress</p>
+                <p className="mt-0.5 text-[10px] font-semibold whitespace-nowrap text-blue-500 uppercase tracking-wide">In progress</p>
               ) : null}
             </>
           );

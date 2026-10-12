@@ -231,12 +231,8 @@ export async function loadTransactionsPageData(kpiVariant: FinanceKpiVariant): P
         counterpartyIds.add(row.to_account_id);
       }
     }
-    if (counterpartyIds.size > 0) {
-      const { data: counterpartyRows, error: counterpartyError } = await supabase
-        .from("accounts")
-        .select("id, name, account_type")
-        .in("id", [...counterpartyIds]);
-      for (const row of counterpartyRows ?? []) {
+    for (const row of accountsResult.data ?? []) {
+      if (counterpartyIds.has(row.id)) {
         ledgerAccountLabelById[row.id] = accountLedgerLabel(row.name, row.account_type);
       }
     }

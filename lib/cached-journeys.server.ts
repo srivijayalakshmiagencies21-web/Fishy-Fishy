@@ -4,6 +4,8 @@ import { unstable_cache } from "next/cache";
 import {
   JOURNEY_CARD_SELECT,
   JOURNEY_CARD_SELECT_FALLBACK,
+  JOURNEY_CARD_SELECT_FALLBACK_WITH_START_ITEMS,
+  JOURNEY_CARD_SELECT_WITH_START_ITEMS,
   mapJourneySummaries,
   type JourneySummary,
 } from "@/lib/journey-cards";
@@ -22,25 +24,6 @@ export type { OverviewJourneyRow } from "@/lib/overview-types";
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 const JOURNEY_REVALIDATE_SEC = 30;
-
-async function loadStartItemsByTruckId(supabase: SupabaseServerClient, truckIds: string[]) {
-  const startItemsByTruckId = new Map<string, any[]>();
-  if (truckIds.length === 0) return startItemsByTruckId;
-
-  const { data: startRows, error: startItemsError } = await supabase
-    .from("start_truck_items" as any)
-    .select("truck_id, supplier_id, fish_id, quantity, supplier:supplier_id(name), fish:fish_id(fish_type, seed_size)")
-    .in("truck_id", truckIds);
-
-  if (!startItemsError && startRows) {
-    for (const row of startRows as any[]) {
-      const list = startItemsByTruckId.get(row.truck_id) ?? [];
-      list.push(row);
-      startItemsByTruckId.set(row.truck_id, list);
-    }
-  }
-  return startItemsByTruckId;
-}
 
 async function loadStartJourneysRaw(supabase: SupabaseServerClient) {
   const [{ count: totalJourneys }, { data: journeys, error }] = await Promise.all([
@@ -82,32 +65,19 @@ async function loadStartJourneysRaw(supabase: SupabaseServerClient) {
             quantity,
             supplier:supplier_id(name),
             fish:fish_id(fish_type, seed_size)
+         ),
+         start_items:start_truck_items(
+            supplier_id,
+            fish_id,
+            quantity,
+            supplier:supplier_id(name),
+            fish:fish_id(fish_type, seed_size)
          )
       )
     `)
       .in("phase", ["start", "transfer", "final", "closed"])
       .order("created_at", { ascending: true }),
   ]);
-
-  const startItemsByTruckId = new Map<string, any[]>();
-  if (!error && journeys?.length) {
-    const truckIds = journeys.flatMap((j: any) => (j.trucks ?? []).map((t: any) => t.id)).filter(Boolean);
-    if (truckIds.length > 0) {
-      const { data: startRows, error: startItemsError } = await supabase
-        .from("start_truck_items" as any)
-        .select(
-          "truck_id, supplier_id, fish_id, quantity, supplier:supplier_id(name), fish:fish_id(fish_type, seed_size)",
-        )
-        .in("truck_id", truckIds);
-      if (!startItemsError && startRows) {
-        for (const row of startRows as any[]) {
-          const list = startItemsByTruckId.get(row.truck_id) ?? [];
-          list.push(row);
-          startItemsByTruckId.set(row.truck_id, list);
-        }
-      }
-    }
-  }
 
   let activeJourneys: any[] = [];
   if (!error && journeys) {
@@ -154,7 +124,7 @@ async function loadStartJourneysRaw(supabase: SupabaseServerClient) {
               fish_type: item.fish?.fish_type || "Unknown",
               seed_size: item.fish?.seed_size || "Unknown",
             })) || [],
-          start_items: (startItemsByTruckId.get(t.id) ?? []).map((item: any) => ({
+          start_items: (t.start_items ?? []).map((item: any) => ({
             supplier_id: item.supplier_id,
             fish_id: item.fish_id,
             quantity: item.quantity,
@@ -171,9 +141,14 @@ async function loadStartJourneysRaw(supabase: SupabaseServerClient) {
 
 async function fetchJourneyCardRows(
   supabase: SupabaseServerClient,
-  options?: { phases?: string[] },
+  options?: { phases?: string[]; withStartItems?: boolean },
 ) {
-  let query = supabase.from("journeys").select(JOURNEY_CARD_SELECT).order("created_at", { ascending: true });
+  const select = options?.withStartItems ? JOURNEY_CARD_SELECT_WITH_START_ITEMS : JOURNEY_CARD_SELECT;
+  const fallbackSelect = options?.withStartItems
+    ? JOURNEY_CARD_SELECT_FALLBACK_WITH_START_ITEMS
+    : JOURNEY_CARD_SELECT_FALLBACK;
+
+  let query = supabase.from("journeys").select(select).order("created_at", { ascending: true });
   if (options?.phases?.length) {
     query = query.in("phase", options.phases);
   }
@@ -183,7 +158,7 @@ async function fetchJourneyCardRows(
     console.error("[journeys] card fetch failed, retrying without odometer stage columns:", error.message);
     let fallbackQuery = supabase
       .from("journeys")
-      .select(JOURNEY_CARD_SELECT_FALLBACK)
+      .select(fallbackSelect)
       .order("created_at", { ascending: true });
     if (options?.phases?.length) {
       fallbackQuery = fallbackQuery.in("phase", options.phases);
@@ -203,21 +178,10 @@ async function loadJourneySummariesRaw(supabase: SupabaseServerClient, phases: s
 }
 
 async function loadOverviewJourneysRaw(supabase: SupabaseServerClient): Promise<OverviewJourneyRow[]> {
-  const journeys = await fetchJourneyCardRows(supabase);
+  const journeys = await fetchJourneyCardRows(supabase, { withStartItems: true });
   if (journeys.length === 0) return [];
 
-  const truckIds = journeys.flatMap((j: any) => (j.trucks ?? []).map((t: any) => t.id)).filter(Boolean);
-  const startItemsByTruckId = await loadStartItemsByTruckId(supabase, truckIds);
-
-  const withStartItems = journeys.map((j: any) => ({
-    ...j,
-    trucks: (j.trucks ?? []).map((t: any) => ({
-      ...t,
-      start_items: startItemsByTruckId.get(t.id) ?? [],
-    })),
-  }));
-
-  const rows: OverviewJourneyRow[] = mapJourneySummaries(withStartItems).map((summary) => {
+  const rows: OverviewJourneyRow[] = mapJourneySummaries(journeys).map((summary) => {
     const trucks = summary.trucks;
     return {
       ...summary,

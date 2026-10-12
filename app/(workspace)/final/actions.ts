@@ -4,7 +4,7 @@ import { snapshotStartBeforeTransfer, snapshotTransferBeforeFinal } from "@/lib/
 import {
   formDataFile,
   odometerImageObjectPath,
-  primaryTruckNumberById,
+  primaryTruckNumbersFromRows,
   resolveJourneyNumber,
   secondaryTruckStorageLabel,
 } from "@/lib/odometer-image";
@@ -120,31 +120,51 @@ export async function recordUnload(state: unknown, formData: FormData) {
     }>;
   };
 
-  let districtId = payload.district_id ?? null;
-  if (!districtId) {
-    const { data: truckRow } = await supabase
-      .from("journey_trucks")
-      .select("district_id")
+  const unloadTruckIds = payload.trucks.map((truck) => truck.truck_id);
+
+  const [
+    { data: allTruckRows, error: trucksError },
+    { data: allTruckItems, error: itemsError },
+    journeyNumber,
+  ] = await Promise.all([
+    supabase
+      .from("journey_trucks" as any)
+      .select(
+        "id, vehicle_number, primary_truck_id, created_at, district_id, odometer_reading, odometer_image_path, start_odometer_reading, start_odometer_image_path, transfer_odometer_reading, transfer_odometer_image_path, final_odometer_reading",
+      )
       .eq("journey_id", journeyId)
-      .not("district_id", "is", null)
-      .limit(1)
-      .maybeSingle();
-    districtId = truckRow?.district_id ?? null;
-  }
+      .order("created_at", { ascending: true }),
+    unloadTruckIds.length > 0
+      ? supabase
+          .from("truck_items")
+          .select("truck_id, supplier_id, fish_id, quantity, fish:fish_id(fish_type, seed_size)")
+          .in("truck_id", unloadTruckIds)
+      : Promise.resolve({ data: [], error: null }),
+    resolveJourneyNumber(supabase, journeyId),
+  ]);
+
+  if (trucksError) return { success: false, error: trucksError.message };
+  if (itemsError) return { success: false, error: itemsError.message };
+
+  const truckRows = (allTruckRows ?? []) as any[];
+  const truckRowMap = new Map<string, any>(truckRows.map((row) => [row.id as string, row]));
+  const primaryNumbers = primaryTruckNumbersFromRows(truckRows);
+
+  const districtId =
+    payload.district_id ?? (truckRows.find((row) => row.district_id != null)?.district_id as number | undefined) ?? null;
   if (!districtId) {
     return { success: false, error: "Journey district is missing — cannot save societies." };
   }
 
-  const journeyNumber = await resolveJourneyNumber(supabase, journeyId);
-  const primaryNumbers = await primaryTruckNumberById(supabase, journeyId);
+  const itemsByTruckId = new Map<string, any[]>();
+  for (const item of (allTruckItems ?? []) as any[]) {
+    const list = itemsByTruckId.get(item.truck_id) ?? [];
+    list.push(item);
+    itemsByTruckId.set(item.truck_id, list);
+  }
 
   for (const truck of payload.trucks) {
-    const { data: truckItems, error: itemsError } = await supabase
-      .from("truck_items")
-      .select("supplier_id, fish_id, quantity, fish:fish_id(fish_type, seed_size)")
-      .eq("truck_id", truck.truck_id);
-
-    if (itemsError) return { success: false, error: itemsError.message };
+    const truckItems = itemsByTruckId.get(truck.truck_id) ?? [];
 
     const dropsForValidation = [
       {
@@ -161,71 +181,66 @@ export async function recordUnload(state: unknown, formData: FormData) {
     if (qtyError) return { success: false, error: qtyError };
   }
 
-  const { data: allTruckRows } = await supabase
-    .from("journey_trucks")
-    .select("id, vehicle_number, primary_truck_id, created_at, odometer_image_path")
-    .eq("journey_id", journeyId)
-    .order("created_at", { ascending: true });
-  const truckRowMap = new Map<string, any>(
-    ((allTruckRows as any[]) ?? []).map((r: any) => [r.id as string, r]),
+  const missingOdometer = payload.trucks.some(
+    (truck) =>
+      !formDataFile(formData, `unload_image_${truck.truck_id}`) &&
+      !truckRowMap.get(truck.truck_id)?.odometer_image_path,
   );
+  if (missingOdometer) {
+    return { success: false, error: "Odometer capture is required to complete unload for each truck." };
+  }
 
-  const uploadedUnloadPaths = await Promise.all(
-    payload.trucks.map(async (truck) => {
-      let odometer_image_path: string | null = null;
-      const odometer_image = formDataFile(formData, `unload_image_${truck.truck_id}`);
-      if (odometer_image) {
-        const truckRow = truckRowMap.get(truck.truck_id);
-        const vehicleNumber = truckRow?.vehicle_number ?? "UNKNOWN";
-        const primaryId = truckRow?.primary_truck_id;
-        let truckSegment: string;
+  const societyKey = (drop: { society_id?: number | null; society_name?: string }) =>
+    drop.society_id ? `id:${drop.society_id}` : `name:${drop.society_name?.trim().toLowerCase() ?? ""}`;
 
-        if (primaryId) {
-          const primaryTruckNumber = primaryNumbers.get(primaryId) ?? 1;
-          const siblings = (allTruckRows ?? []).filter((r: any) => r.primary_truck_id === primaryId);
-          const secondaryIndex = siblings.findIndex((row: any) => row.id === truck.truck_id);
-          truckSegment = secondaryTruckStorageLabel(
-            primaryTruckNumber,
-            secondaryIndex >= 0 ? secondaryIndex : 0,
-          );
-        } else {
-          truckSegment = `PT${primaryNumbers.get(truck.truck_id) ?? 1}`;
-        }
-
-        const objectPath = odometerImageObjectPath({
-          journeyNumber,
-          truckSegment,
-          vehicleNumber,
-          pointCode: "FP",
-          odometerReading: truck.odometer_reading,
-          file: odometer_image,
-        });
-        odometer_image_path = await uploadOdometerImageStored(supabase, odometer_image, objectPath);
-      }
-      return { truckId: truck.truck_id, odometer_image_path };
-    })
-  );
-  const uploadedMap = new Map(uploadedUnloadPaths.map((u) => [u.truckId, u.odometer_image_path]));
-
+  const societyIdByKey = new Map<string, number>();
   for (const truck of payload.trucks) {
-    let odometer_image_path = uploadedMap.get(truck.truck_id) ?? null;
+    for (const drop of truck.drops) {
+      if (drop.quantity <= 0) continue;
+      const key = societyKey(drop);
+      if (societyIdByKey.has(key)) continue;
+      const resolved = await resolveSocietyId(supabase, districtId, drop.society_id, drop.society_name);
+      if ("error" in resolved) return { success: false, error: resolved.error };
+      societyIdByKey.set(key, resolved.id);
+    }
+  }
 
-    if (!odometer_image_path) {
-      const existingRow = truckRowMap.get(truck.truck_id);
-      odometer_image_path = (existingRow?.odometer_image_path as string | null) ?? null;
+  const uploadUnloadPhoto = async (truck: (typeof payload.trucks)[number]): Promise<string | null> => {
+    const odometer_image = formDataFile(formData, `unload_image_${truck.truck_id}`);
+    if (!odometer_image) return null;
+
+    const truckRow = truckRowMap.get(truck.truck_id);
+    const vehicleNumber = truckRow?.vehicle_number ?? "UNKNOWN";
+    const primaryId = truckRow?.primary_truck_id;
+    let truckSegment: string;
+
+    if (primaryId) {
+      const primaryTruckNumber = primaryNumbers.get(primaryId) ?? 1;
+      const siblings = truckRows.filter((r: any) => r.primary_truck_id === primaryId);
+      const secondaryIndex = siblings.findIndex((row: any) => row.id === truck.truck_id);
+      truckSegment = secondaryTruckStorageLabel(
+        primaryTruckNumber,
+        secondaryIndex >= 0 ? secondaryIndex : 0,
+      );
+    } else {
+      truckSegment = `PT${primaryNumbers.get(truck.truck_id) ?? 1}`;
     }
 
-    if (!odometer_image_path) {
-      return { success: false, error: "Odometer capture is required to complete unload for each truck." };
-    }
+    const objectPath = odometerImageObjectPath({
+      journeyNumber,
+      truckSegment,
+      vehicleNumber,
+      pointCode: "FP",
+      odometerReading: truck.odometer_reading,
+      file: odometer_image,
+    });
+    return uploadOdometerImageStored(supabase, odometer_image, objectPath);
+  };
 
-    const { data: existingTruck } = await supabase
-      .from("journey_trucks" as any)
-      .select(
-        "odometer_reading, odometer_image_path, start_odometer_reading, start_odometer_image_path, transfer_odometer_reading, transfer_odometer_image_path, final_odometer_reading, primary_truck_id",
-      )
-      .eq("id", truck.truck_id)
-      .maybeSingle();
+  const saveUnloadTruck = async (truck: (typeof payload.trucks)[number]): Promise<string | null> => {
+    const existingTruck = truckRowMap.get(truck.truck_id);
+    const odometer_image_path =
+      (await uploadUnloadPhoto(truck)) ?? (existingTruck?.odometer_image_path as string | null) ?? null;
 
     const startOdometer = snapshotStartBeforeTransfer(existingTruck ?? {});
     const transferOdometer = snapshotTransferBeforeFinal(existingTruck ?? {});
@@ -256,37 +271,36 @@ export async function recordUnload(state: unknown, formData: FormData) {
       } as any)
       .eq("id", truck.truck_id);
 
-    if (truckError) {
-      return { success: false, error: truckError.message };
-    }
+    if (truckError) return truckError.message;
 
     await supabase.from("truck_unload_drops" as any).delete().eq("truck_id", truck.truck_id);
 
-    const drops = truck.drops.filter((drop) => drop.quantity > 0);
-    if (drops.length > 0) {
-      const resolvedDrops: Array<{
-        truck_id: string;
-        society_id: number;
-        supplier_id: number;
-        fish_id: number;
-        quantity: number;
-      }> = [];
+    const resolvedDrops = truck.drops
+      .filter((drop) => drop.quantity > 0)
+      .map((drop) => ({
+        truck_id: truck.truck_id,
+        society_id: societyIdByKey.get(societyKey(drop))!,
+        supplier_id: drop.supplier_id,
+        fish_id: drop.fish_id,
+        quantity: drop.quantity,
+      }));
 
-      for (const drop of drops) {
-        const resolved = await resolveSocietyId(supabase, districtId, drop.society_id, drop.society_name);
-        if ("error" in resolved) return { success: false, error: resolved.error };
-        resolvedDrops.push({
-          truck_id: truck.truck_id,
-          society_id: resolved.id,
-          supplier_id: drop.supplier_id,
-          fish_id: drop.fish_id,
-          quantity: drop.quantity,
-        });
-      }
-
+    if (resolvedDrops.length > 0) {
       const { error: dropsError } = await supabase.from("truck_unload_drops" as any).insert(resolvedDrops as any);
-      if (dropsError) return { success: false, error: dropsError.message };
+      if (dropsError) return dropsError.message;
     }
+    return null;
+  };
+
+  let saveErrors: Array<string | null>;
+  try {
+    saveErrors = await Promise.all(payload.trucks.map((truck) => saveUnloadTruck(truck)));
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Upload failed." };
+  }
+  const saveError = saveErrors.find((message) => message !== null);
+  if (saveError) {
+    return { success: false, error: saveError };
   }
 
   const { error: phaseError } = await supabase

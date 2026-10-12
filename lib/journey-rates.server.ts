@@ -1,6 +1,11 @@
 import "server-only";
 
-import { JOURNEY_CARD_SELECT_FALLBACK, mapJourneySummaries, type JourneySummary } from "@/lib/journey-cards";
+import {
+  JOURNEY_CARD_SELECT_FALLBACK_WITH_START_ITEMS,
+  JOURNEY_TRUCK_START_ITEMS_FIELD,
+  mapJourneySummaries,
+  type JourneySummary,
+} from "@/lib/journey-cards";
 import {
   buildInitialRateMap,
   buildJourneyRateRecord,
@@ -39,7 +44,8 @@ const JOURNEY_RATES_TRUCK_FIELDS = `
         quantity,
         supplier:supplier_id(name),
         fish:fish_id(fish_type, seed_size)
-     )
+     ),
+     ${JOURNEY_TRUCK_START_ITEMS_FIELD}
 `;
 
 const JOURNEY_RATES_SELECT = `
@@ -54,27 +60,8 @@ const JOURNEY_RATES_SELECT = `
   )
 `;
 
-async function loadStartItemsByTruckId(supabase: Awaited<ReturnType<typeof createClient>>, truckIds: string[]) {
-  const startItemsByTruckId = new Map<string, unknown[]>();
-  if (truckIds.length === 0) return startItemsByTruckId;
-
-  const { data: startRows, error } = await supabase
-    .from("start_truck_items" as any)
-    .select("truck_id, supplier_id, fish_id, quantity, supplier:supplier_id(name), fish:fish_id(fish_type, seed_size)")
-    .in("truck_id", truckIds);
-
-  if (!error && startRows) {
-    for (const row of startRows as any[]) {
-      const list = startItemsByTruckId.get(row.truck_id) ?? [];
-      list.push(row);
-      startItemsByTruckId.set(row.truck_id, list);
-    }
-  }
-  return startItemsByTruckId;
-}
-
 async function fetchClosedJourneys(supabase: Awaited<ReturnType<typeof createClient>>): Promise<JourneySummary[]> {
-  const fallbackSelect = JOURNEY_CARD_SELECT_FALLBACK.replace(
+  const fallbackSelect = JOURNEY_CARD_SELECT_FALLBACK_WITH_START_ITEMS.replace(
     "transporter:transporter_id(name)",
     "transporter:transporter_id(name, transporter_scope)",
   );
@@ -98,29 +85,15 @@ async function fetchClosedJourneys(supabase: Awaited<ReturnType<typeof createCli
     }
   }
 
-  const journeys = (data ?? []) as any[];
-  const truckIds = journeys.flatMap((j) => (j.trucks ?? []).map((t: any) => t.id)).filter(Boolean);
-  const startItemsByTruckId = await loadStartItemsByTruckId(supabase, truckIds);
-
-  const withStartItems = journeys.map((j) => ({
-    ...j,
-    trucks: (j.trucks ?? []).map((t: any) => ({
-      ...t,
-      start_items: startItemsByTruckId.get(t.id) ?? [],
-    })),
-  }));
-
-  return mapJourneySummaries(withStartItems).filter((row) => isClosedJourney(row.phase));
+  return mapJourneySummaries((data ?? []) as any[]).filter((row) => isClosedJourney(row.phase));
 }
 
-async function loadRateLinesByJourney(supabase: Awaited<ReturnType<typeof createClient>>, journeyIds: string[]) {
+async function loadRateLinesByJourney(supabase: Awaited<ReturnType<typeof createClient>>) {
   const map = new Map<string, Map<string, number | null>>();
-  if (journeyIds.length === 0) return map;
 
   const { data, error } = await (supabase as any)
     .from("journey_rate_lines")
-    .select("journey_id, line_key, rate")
-    .in("journey_id", journeyIds);
+    .select("journey_id, line_key, rate");
 
   if (error) {
     console.error("[journey-rates] could not load saved rates:", error.message);
@@ -185,12 +158,11 @@ export async function loadJourneyRatesData(): Promise<{
 }> {
   try {
     const supabase = await createClient();
-    const [summaries, numbers] = await Promise.all([
+    const [summaries, numbers, ratesByJourney] = await Promise.all([
       fetchClosedJourneys(supabase),
       journeyNumberById(supabase),
+      loadRateLinesByJourney(supabase),
     ]);
-    const journeyIds = summaries.map((row) => row.journeyId);
-    const ratesByJourney = await loadRateLinesByJourney(supabase, journeyIds);
     const ordered = [...summaries].sort((a, b) => {
       const aTime = a.finalTime ? Date.parse(a.finalTime) : 0;
       const bTime = b.finalTime ? Date.parse(b.finalTime) : 0;

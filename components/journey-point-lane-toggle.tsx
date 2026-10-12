@@ -20,6 +20,8 @@ export function JourneyPointLaneSwitcher({
   inProgressCount: number;
   closedCount: number;
 }) {
+  if (inProgressCount === 0 && closedCount === 0) return null;
+
   const countFor = (mode: JourneyPointLaneView) =>
     mode === "in_progress" ? inProgressCount : closedCount;
 

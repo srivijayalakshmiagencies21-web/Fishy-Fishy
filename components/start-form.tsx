@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useRef, useState, useEffect, useActionState } from "react";
 import type { DistrictRow, FishRow, VendorRow } from "@/lib/masters";
 import { OdometerSummaryDetail } from "@/components/odometer-summary-detail";
@@ -141,7 +140,6 @@ export function StartPointForm({
   activeJourneys: NestedJourney[];
   totalJourneys?: number;
 }) {
-  const router = useRouter();
   const [state, formAction, pending] = useActionState(createJourney, null);
   const [viewState, setViewState] = useState<'list' | 'new' | 'edit'>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -221,11 +219,10 @@ export function StartPointForm({
     setSubmitError(null);
     setActiveTruck(0);
     localStorage.removeItem("journey_draft");
-    router.refresh();
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
-  }, [state, router]);
+  }, [state]);
 
   const trucksContainerRef = useRef<HTMLDivElement>(null);
   const scrollToTruckIndexRef = useRef<number | null>(null);

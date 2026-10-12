@@ -32,6 +32,9 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [now, setNow] = useState(() => new Date());
+  const [pendingNav, setPendingNav] = useState<{ href: string; from: string } | null>(null);
+  const pendingHref = pendingNav && pendingNav.from === pathname ? pendingNav.href : null;
+  const activePath = pendingHref ?? pathname;
   const current = masterLinks.find((link) => pathname === `/masters/${link.slug}`);
   const shownMaster = masterLinks.find((link) => link.slug === (previewMaster ?? current?.slug)) ?? current;
   const directoryTab = adminTab ?? (pathname.startsWith("/admin/roles") ? "roles" : "users");
@@ -92,7 +95,10 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
     if (pathname === href) return;
     event.preventDefault();
-    if (paint) flushSync(paint);
+    flushSync(() => {
+      setPendingNav({ href, from: pathname });
+      paint?.();
+    });
     startTransition(() => router.push(href));
   }
 
@@ -139,6 +145,7 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
 
   return (
     <div className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-transparent text-[var(--text-primary)]">
+      {pendingHref ? <div key={pendingHref} className="nav-progress" aria-hidden="true" /> : null}
       <header className="app-header">
         <div className="header-inner">
           <div className="header-side" />
@@ -188,7 +195,7 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
         </div>
         <nav className="sidebar-nav flex flex-col gap-1.5 flex-1 overflow-x-hidden overflow-y-auto px-3 py-2">
           {visibleNav.map((item) => {
-            const active = navIsActive(item.key, pathname);
+            const active = navIsActive(item.key, activePath);
             return (
               <Link
                 key={item.key}
@@ -242,17 +249,6 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
                       ? (shownMaster?.label ?? "Masters")
                       : (currentPage?.label ?? "Fishy-Fishy")}
               </h1>
-              {onUsers ? (
-                <p className="page-subtitle">
-                  {pages.includes("users")
-                    ? "Accounts and the pages each role can open."
-                    : "Reset passwords and deactivate managers or employees."}
-                </p>
-              ) : shownMaster && onMasters ? (
-                <p className="page-subtitle">{shownMaster.description}</p>
-              ) : currentPage && !onMasters && !pathname.startsWith("/account") ? (
-                <p className="page-subtitle">{currentPage.description}</p>
-              ) : null}
               {onMasters ? (
                 <div className="segmented-control mt-4" role="tablist" aria-label="Masters">
                   {masterLinks.map((link) => {
@@ -309,7 +305,7 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
 
       <nav className="mobile-tabbar" aria-label="Main">
         {visibleNav.map((item) => {
-          const active = navIsActive(item.key, pathname);
+          const active = navIsActive(item.key, activePath);
           return (
             <Link
               key={item.key}

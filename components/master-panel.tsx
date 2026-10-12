@@ -106,7 +106,6 @@ function CategoryRoleField({
       <SelectField
         multiple
         searchable
-        compact={compact}
         autoSelectWhenSingle={false}
         valueMultiple={selected}
         onChangeMultiple={setSelected}
@@ -140,6 +139,7 @@ export function MasterPanel({
           deleteAction={deletePaymentMode}
           rows={data.rows}
           empty="No payments yet."
+          addLabel="Add payment mode"
         />
       ) : null}
       {data.kind === "transactions" ? (
@@ -195,7 +195,7 @@ function AccountMaster({ rows, users }: { rows: AccountRow[]; users: LinkUserOpt
 
   return (
     <>
-      <EntryCard>
+      <EntryCard addLabel="Add account" pending={pending} error={state?.error}>
         <form key={formKey} action={formAction} className="space-y-3">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_repeat(4,minmax(0,1fr))_auto] xl:items-end">
             <label className="block min-w-0 space-y-1 md:col-span-2 xl:col-span-1">
@@ -243,7 +243,7 @@ function AccountMaster({ rows, users }: { rows: AccountRow[]; users: LinkUserOpt
                 disabled={pending || selectedTypes.length === 0}
                 className="btn-primary w-full md:w-auto"
               >
-                {pending ? "Saving…" : "Add"}
+                {pending ? "Saving…" : "Save"}
               </button>
             </div>
           </div>
@@ -400,7 +400,7 @@ function TransactionCategoriesMaster({ rows, roles }: { rows: TransactionCategor
   const [editRow, setEditRow] = useState<TransactionCategoryRow | null>(null);
   return (
     <>
-      <EntryCard>
+      <EntryCard addLabel="Add category" pending={pending} error={state?.error}>
         <form action={formAction} className="space-y-3">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.95fr)_minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,1fr)_auto] xl:items-end">
             <label className="block min-w-0 space-y-1 md:col-span-2 xl:col-span-1">
@@ -441,7 +441,7 @@ function TransactionCategoriesMaster({ rows, roles }: { rows: TransactionCategor
             <CategoryRoleField roles={roles} compact />
             <div className="md:col-span-2 xl:col-span-1 xl:justify-self-end">
               <button type="submit" disabled={pending} className="btn-primary w-full md:w-auto">
-                {pending ? "Saving…" : "Add"}
+                {pending ? "Saving…" : "Save"}
               </button>
             </div>
           </div>
@@ -585,6 +585,7 @@ function NamedMaster({
   deleteAction,
   rows,
   empty,
+  addLabel,
 }: {
   fieldName: string;
   fieldLabel: string;
@@ -592,11 +593,17 @@ function NamedMaster({
   deleteAction: (formData: FormData) => Promise<void>;
   rows: NamedRow[];
   empty: string;
+  addLabel: string;
 }) {
+  const [state, formAction, pending] = useActionState(action, null);
+
   return (
     <>
-      <EntryCard>
-        <SingleFieldForm action={action} name={fieldName} label={fieldLabel} />
+      <EntryCard addLabel={addLabel} pending={pending} error={state?.error}>
+        <form action={formAction} className="flex flex-wrap items-end gap-4">
+          <Field label={fieldLabel} name={fieldName} />
+          <FormFooter error={state?.error} pending={pending} />
+        </form>
       </EntryCard>
       <RowsCard empty={empty} count={rows.length}>
         <div className="overflow-x-auto">
@@ -637,7 +644,7 @@ function VendorMaster({ rows }: { rows: VendorRow[] }) {
 
   return (
     <>
-      <EntryCard>
+      <EntryCard addLabel="Add vendor" pending={pending} error={state?.error}>
         <form action={action} className="flex flex-wrap items-end gap-4">
           <Field label="Vendor name" name="name" />
           <label className="block w-full space-y-1 sm:w-auto sm:min-w-[200px] sm:flex-1">
@@ -734,7 +741,7 @@ function FishMaster({ rows }: { rows: FishRow[] }) {
 
   return (
     <>
-      <EntryCard>
+      <EntryCard addLabel="Add fish" pending={pending} error={state?.error}>
         <form action={action} className="flex flex-wrap items-end gap-4">
           <Field label="Fish type" name="fish_type" />
           <Field label="Seed size" name="seed_size" />
@@ -790,7 +797,7 @@ function DistrictMaster({ rows }: { rows: DistrictRow[] }) {
 
   return (
     <>
-      <EntryCard>
+      <EntryCard addLabel="Add district" pending={pending} error={state?.error}>
         <form ref={formRef} action={action} className="flex flex-wrap items-end gap-4">
           <Field label="District name" name="name" />
           <FormFooter error={state?.error} pending={pending} />
@@ -965,25 +972,6 @@ function InlineAdd({
   );
 }
 
-function SingleFieldForm({
-  action,
-  name,
-  label,
-}: {
-  action: (state: FormState, formData: FormData) => Promise<FormState>;
-  name: string;
-  label: string;
-}) {
-  const [state, formAction, pending] = useActionState(action, null);
-
-  return (
-    <form action={formAction} className="flex flex-wrap items-end gap-4">
-      <Field label={label} name={name} />
-      <FormFooter error={state?.error} pending={pending} />
-    </form>
-  );
-}
-
 function Field({
   label,
   name,
@@ -1006,7 +994,7 @@ function Field({
 function FormFooter({
   error,
   pending,
-  label = "Add",
+  label = "Save",
   className,
 }: {
   error?: string;
@@ -1028,8 +1016,47 @@ function FormFooter({
   );
 }
 
-function EntryCard({ children }: { children: React.ReactNode }) {
-  return <section className="surface p-4 sm:p-5">{children}</section>;
+/** Collapsed to an "Add …" button; expands to the form and closes again after a successful save. */
+function EntryCard({
+  addLabel,
+  pending,
+  error,
+  children,
+}: {
+  addLabel: string;
+  pending: boolean;
+  error?: string | null;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const [prevPending, setPrevPending] = useState(pending);
+
+  if (pending !== prevPending) {
+    setPrevPending(pending);
+    if (!pending && !error) setOpen(false);
+  }
+
+  if (!open) {
+    return (
+      <div>
+        <button type="button" className="btn-primary w-full sm:w-auto" onClick={() => setOpen(true)}>
+          + {addLabel}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <section className="surface p-4 sm:p-5">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold">{addLabel}</h2>
+        <button type="button" className="btn-quiet !min-h-0 !px-0 text-sm" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+      {children}
+    </section>
+  );
 }
 
 function RowsCard({

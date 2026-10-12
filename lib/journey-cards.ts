@@ -67,6 +67,25 @@ export const JOURNEY_CARD_SELECT_FALLBACK = `
   )
 `;
 
+/** Quantities captured at start (`start_truck_items`), embedded per truck. */
+export const JOURNEY_TRUCK_START_ITEMS_FIELD = `
+     start_items:start_truck_items(
+        supplier_id,
+        fish_id,
+        quantity,
+        supplier:supplier_id(name),
+        fish:fish_id(fish_type, seed_size)
+     )
+`;
+
+function withTruckStartItems(select: string) {
+  const trucksEnd = select.lastIndexOf(")");
+  return `${select.slice(0, trucksEnd)},${JOURNEY_TRUCK_START_ITEMS_FIELD}${select.slice(trucksEnd)}`;
+}
+
+export const JOURNEY_CARD_SELECT_WITH_START_ITEMS = withTruckStartItems(JOURNEY_CARD_SELECT);
+export const JOURNEY_CARD_SELECT_FALLBACK_WITH_START_ITEMS = withTruckStartItems(JOURNEY_CARD_SELECT_FALLBACK);
+
 export type JourneySummary = {
   db_id: number;
   id: string;
