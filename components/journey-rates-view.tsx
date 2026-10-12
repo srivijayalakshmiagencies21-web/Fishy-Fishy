@@ -14,7 +14,8 @@ import {
 } from "@/lib/journey-rates";
 import { formatAmount } from "@/lib/transactions";
 
-const rateInputClass = "input-field !min-h-[36px] !w-[5.5rem] !py-1.5 !px-2 tabular-nums text-sm";
+const rateInputClass =
+  "input-field !h-[32px] sm:!h-[36px] !min-h-[32px] sm:!min-h-[36px] !w-[4.75rem] sm:!w-[5.25rem] !py-0.5 !px-2 tabular-nums text-xs sm:text-sm font-semibold text-center rounded-lg bg-white";
 
 function groupByLabel<T>(items: T[], label: (item: T) => string) {
   const map = new Map<string, T[]>();
@@ -65,7 +66,7 @@ function SavedRateInput({
 
   return (
     <form
-      className="inline-block"
+      className="inline-flex items-center"
       onSubmit={(event) => {
         event.preventDefault();
         saveIfChanged();
@@ -110,36 +111,6 @@ function RateLineInput({
   );
 }
 
-function RateAmountCells({
-  journeyId,
-  lineKey,
-  rateText,
-  onRateTextChange,
-  multiplier,
-}: {
-  journeyId: string;
-  lineKey: string;
-  rateText: string;
-  onRateTextChange: (value: string) => void;
-  multiplier: number | null;
-}) {
-  const amount = computeLineAmount(multiplier, rateText);
-
-  return (
-    <>
-      <td className="px-2 py-2">
-        <RateLineInput
-          journeyId={journeyId}
-          lineKey={lineKey}
-          rateText={rateText}
-          onRateTextChange={onRateTextChange}
-        />
-      </td>
-      <td className="px-2 py-2 tabular-nums font-medium">{amount != null ? formatAmount(amount) : "—"}</td>
-    </>
-  );
-}
-
 function supplierGroupTotal(
   journeyId: string,
   rows: JourneyRateSupplierLine[],
@@ -174,13 +145,16 @@ function AdditionalChargeInput({
   onChargeTextChange: (value: string) => void;
 }) {
   return (
-    <SavedRateInput
-      journeyId={journeyId}
-      lineKey={lineKey}
-      value={chargeText}
-      onValueChange={onChargeTextChange}
-      ariaLabel="Additional charge"
-    />
+    <div className="flex items-center gap-1">
+      <span className="text-xs font-semibold text-slate-500">₹</span>
+      <SavedRateInput
+        journeyId={journeyId}
+        lineKey={lineKey}
+        value={chargeText}
+        onValueChange={onChargeTextChange}
+        ariaLabel="Additional charge"
+      />
+    </div>
   );
 }
 
@@ -192,6 +166,7 @@ function PartyDetailCard({
   additionalLineKey,
   additionalChargeText,
   onAdditionalChargeChange,
+  accent = "brand",
   children,
 }: {
   title: string;
@@ -201,23 +176,96 @@ function PartyDetailCard({
   additionalLineKey: string;
   additionalChargeText: string;
   onAdditionalChargeChange: (value: string) => void;
+  accent?: "brand" | "rose" | "amber";
   children: ReactNode;
 }) {
+  const isRose = accent === "rose";
+  const isAmber = accent === "amber";
+
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-white shadow-sm">
-      <div className="flex items-baseline justify-between gap-2 border-b border-line bg-blue-soft/60 px-3 py-2">
-        <h4 className="text-sm font-bold text-blue-dark">{title}</h4>
-        <span className="shrink-0 text-sm font-bold tabular-nums text-blue-dark">{formatAmount(finalTotal)}</span>
+    <div
+      className={`overflow-hidden rounded-2xl shadow-xs ${
+        isRose
+          ? "border border-rose-200 bg-white"
+          : isAmber
+            ? "border border-amber-200 bg-white"
+            : "border border-line bg-white"
+      }`}
+    >
+      {/* Premium Header */}
+      <div
+        className={`flex items-center justify-between gap-3 px-3.5 py-2.5 sm:px-4 sm:py-3 ${
+          isRose
+            ? "border-b border-rose-200 bg-rose-50/70"
+            : isAmber
+              ? "border-b border-amber-200 bg-amber-50/70"
+              : "border-b border-line bg-slate-50/90"
+        }`}
+      >
+        <h4
+          className={`text-sm sm:text-base font-bold truncate min-w-0 ${
+            isRose
+              ? "text-rose-950"
+              : isAmber
+                ? "text-amber-950"
+                : "text-blue-dark"
+          }`}
+        >
+          {title}
+        </h4>
+        <div
+          className={`shrink-0 rounded-xl px-2.5 py-1 text-xs sm:text-sm font-extrabold tabular-nums shadow-2xs ${
+            isRose
+              ? "bg-rose-100 border border-rose-300 text-rose-900"
+              : isAmber
+                ? "bg-amber-100 border border-amber-300 text-amber-900"
+                : "bg-blue-soft border border-[var(--brand)]/15 text-blue-dark"
+          }`}
+        >
+          {formatAmount(finalTotal)}
+        </div>
       </div>
-      <div className="p-2">{children}</div>
-      <div className="border-t border-line bg-[var(--page)] px-3 py-2">
+
+      {/* Main Content (Responsive non-scrollable view) */}
+      <div className="p-3 sm:p-4">{children}</div>
+
+      {/* Financial Summary Footer */}
+      <div
+        className={`px-3.5 py-3 sm:px-4 space-y-2.5 ${
+          isRose
+            ? "border-t border-rose-200 bg-rose-50/30"
+            : isAmber
+              ? "border-t border-amber-200 bg-amber-50/30"
+              : "border-t border-line bg-[var(--page)]"
+        }`}
+      >
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-muted">Total after rates</span>
-            <span className="tabular-nums font-semibold text-blue-dark">{formatAmount(linesTotal)}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted font-medium">Total after rates:</span>
+            <span
+              className={`tabular-nums font-bold ${
+                isRose
+                  ? "text-rose-950"
+                  : isAmber
+                    ? "text-amber-950"
+                    : "text-slate-800"
+              }`}
+            >
+              {formatAmount(linesTotal)}
+            </span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-blue-dark">Additional charge</span>
+          <div className="flex items-center gap-1.5">
+            <span
+              className={`font-medium ${
+                isRose
+                  ? "text-rose-700"
+                  : isAmber
+                    ? "text-amber-800"
+                    : "text-slate-600"
+              }`}
+            >
+              Additional charge:
+            </span>
             <AdditionalChargeInput
               journeyId={journeyId}
               lineKey={additionalLineKey}
@@ -226,9 +274,29 @@ function PartyDetailCard({
             />
           </div>
         </div>
-        <div className="mt-2 flex items-center justify-between gap-2 border-t border-line/70 pt-2">
-          <span className="text-sm font-bold text-blue-dark">Grand total</span>
-          <span className="text-sm font-bold tabular-nums text-blue-dark">{formatAmount(finalTotal)}</span>
+        <div
+          className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 ${
+            isRose
+              ? "bg-rose-100/70 border border-rose-200 text-rose-950"
+              : isAmber
+                ? "bg-amber-100/70 border border-amber-200 text-amber-950"
+                : "bg-blue-soft/50 border border-[var(--brand)]/10 text-blue-dark"
+          }`}
+        >
+          <span
+            className={`text-xs sm:text-sm font-bold ${
+              isRose
+                ? "text-rose-900"
+                : isAmber
+                  ? "text-amber-900"
+                  : "text-slate-700"
+            }`}
+          >
+            Grand Total
+          </span>
+          <span className="text-sm sm:text-base font-extrabold tabular-nums">
+            {formatAmount(finalTotal)}
+          </span>
         </div>
       </div>
     </div>
@@ -260,9 +328,9 @@ function CarouselArrow({
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line bg-white text-blue-dark shadow-sm hover:bg-blue-soft"
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-line bg-white text-blue-dark shadow-xs hover:bg-slate-50 active:scale-95 transition-all"
     >
-      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
         {direction === "prev" ? <path d="M15 18l-6-6 6-6" /> : <path d="M9 18l6-6-6-6" />}
       </svg>
     </button>
@@ -294,27 +362,29 @@ function PartyCardCarousel<T extends { title: string }>({
   const showNav = total > 1;
 
   if (!showNav) {
-    return <div className="mx-auto w-full max-w-md">{renderGroup(group)}</div>;
+    return <div className="mx-auto w-full max-w-xl">{renderGroup(group)}</div>;
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl">
-      <div className="flex items-center justify-center gap-2 sm:gap-3">
-        <CarouselArrow
-          direction="prev"
-          label="Previous"
-          onClick={() => setIndex((current) => (current - 1 + total) % total)}
-        />
-        <div className="min-w-0 w-full max-w-md flex-1">{renderGroup(group)}</div>
-        <CarouselArrow
-          direction="next"
-          label="Next"
-          onClick={() => setIndex((current) => (current + 1) % total)}
-        />
+    <div className="mx-auto w-full max-w-xl space-y-2.5">
+      <div className="flex items-center justify-between gap-2 px-1">
+        <span className="text-xs font-bold text-slate-500 tabular-nums">
+          {safeIndex + 1} of {total} · <span className="text-slate-800">{group.title}</span>
+        </span>
+        <div className="flex items-center gap-1.5">
+          <CarouselArrow
+            direction="prev"
+            label="Previous"
+            onClick={() => setIndex((current) => (current - 1 + total) % total)}
+          />
+          <CarouselArrow
+            direction="next"
+            label="Next"
+            onClick={() => setIndex((current) => (current + 1) % total)}
+          />
+        </div>
       </div>
-      <p className="mt-2 text-center text-xs tabular-nums text-muted">
-        {safeIndex + 1} of {total} · {group.title}
-      </p>
+      <div className="min-w-0 w-full">{renderGroup(group)}</div>
     </div>
   );
 }
@@ -366,35 +436,120 @@ function JourneyRateCard({ record, ratesByLine, onRateChange }: { record: Journe
                   onAdditionalChargeChange={(value) =>
                     onRateChange(journeyRateStorageKey(record.journeyId, additionalLineKey), value)
                   }
+                  accent="rose"
                 >
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[280px] text-left text-sm">
+                  {/* Mobile View: Luxury Item Cards (< sm) */}
+                  <div className="space-y-2.5 sm:hidden">
+                    {group.rows.map((line: JourneyRateSupplierLine) => {
+                      const amount = computeLineAmount(
+                        line.quantity,
+                        lineRates.rateTextFor(record.journeyId, line.lineKey)
+                      );
+                      return (
+                        <div
+                          key={line.lineKey}
+                          className="bg-rose-50 border border-rose-200 rounded-2xl p-3 sm:p-4 transition-all hover:bg-rose-50/80 shadow-2xs"
+                        >
+                          {/* Top Row: Fish Type + Seed Size Badge (left) & Calculated Amount (right) */}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="font-bold text-slate-900 text-sm truncate">
+                                {line.fishType}
+                              </span>
+                              {line.seedSize ? (
+                                <span className="shrink-0 rounded-md bg-white border border-rose-200 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">
+                                  {line.seedSize}
+                                </span>
+                              ) : null}
+                            </div>
+                            <span className="font-extrabold tabular-nums text-rose-900 text-sm shrink-0">
+                              {amount != null ? formatAmount(amount) : "—"}
+                            </span>
+                          </div>
+
+                          {/* Bottom Row: Quantity (left) & Interactive Rate Input (right) with labels centered */}
+                          <div className="mt-2.5 flex items-start justify-between gap-2 border-t border-rose-200/70 pt-2 px-1 text-xs">
+                            <div className="flex flex-col items-center text-center">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400">
+                                Qty
+                              </span>
+                              <div className="mt-1 flex h-[32px] sm:h-[36px] items-center justify-center">
+                                <span className="text-sm font-bold text-slate-800 tabular-nums">
+                                  {line.quantity != null ? Number(line.quantity).toLocaleString() : "—"}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-center text-center">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400">
+                                Rate
+                              </span>
+                              <div className="mt-1 flex h-[32px] sm:h-[36px] items-center gap-1">
+                                <span className="text-xs font-semibold text-rose-600">₹</span>
+                                <RateLineInput
+                                  journeyId={record.journeyId}
+                                  lineKey={line.lineKey}
+                                  rateText={lineRates.rateTextFor(record.journeyId, line.lineKey)}
+                                  onRateTextChange={(value) =>
+                                    lineRates.onRateTextChange(record.journeyId, line.lineKey, value)
+                                  }
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Desktop View: Spacious Non-Scrolling Table (sm and up) */}
+                  <div className="hidden sm:block">
+                    <table className="w-full text-left text-sm">
                       <thead>
-                        <tr className="text-blue-dark">
-                          {["Fish type", "Seed size", "Quantity", "Rate", "Amount"].map((header) => (
-                            <th key={header} className="px-2 py-1.5 text-xs font-semibold">
-                              {header}
-                            </th>
-                          ))}
+                        <tr className="border-b border-rose-200 text-xs font-semibold text-rose-900">
+                          <th className="pb-2 pl-2">Fish type</th>
+                          <th className="pb-2 px-2">Seed size</th>
+                          <th className="pb-2 px-2">Quantity</th>
+                          <th className="pb-2 px-2">Rate (₹)</th>
+                          <th className="pb-2 pr-2 text-right">Amount</th>
                         </tr>
                       </thead>
-                      <tbody>
-                        {group.rows.map((line: JourneyRateSupplierLine) => (
-                          <tr key={line.lineKey} className="border-t border-line">
-                            <td className="px-2 py-2">{line.fishType}</td>
-                            <td className="px-2 py-2">{line.seedSize || "—"}</td>
-                            <td className="px-2 py-2 tabular-nums">{line.quantity}</td>
-                            <RateAmountCells
-                              journeyId={record.journeyId}
-                              lineKey={line.lineKey}
-                              rateText={lineRates.rateTextFor(record.journeyId, line.lineKey)}
-                              onRateTextChange={(value) =>
-                                lineRates.onRateTextChange(record.journeyId, line.lineKey, value)
-                              }
-                              multiplier={line.quantity}
-                            />
-                          </tr>
-                        ))}
+                      <tbody className="divide-y divide-rose-100">
+                        {group.rows.map((line: JourneyRateSupplierLine) => {
+                          const amount = computeLineAmount(
+                            line.quantity,
+                            lineRates.rateTextFor(record.journeyId, line.lineKey)
+                          );
+                          return (
+                            <tr key={line.lineKey} className="hover:bg-rose-50/50 transition-colors">
+                              <td className="py-2.5 pl-2 font-semibold text-slate-800">{line.fishType}</td>
+                              <td className="py-2.5 px-2 text-slate-600">
+                                {line.seedSize ? (
+                                  <span className="rounded-md bg-white border border-rose-200 px-1.5 py-0.5 text-[11px] font-bold text-rose-700">
+                                    {line.seedSize}
+                                  </span>
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
+                              <td className="py-2.5 px-2 tabular-nums font-medium text-slate-700">
+                                {line.quantity != null ? Number(line.quantity).toLocaleString() : "—"}
+                              </td>
+                              <td className="py-2.5 px-2">
+                                <RateLineInput
+                                  journeyId={record.journeyId}
+                                  lineKey={line.lineKey}
+                                  rateText={lineRates.rateTextFor(record.journeyId, line.lineKey)}
+                                  onRateTextChange={(value) =>
+                                    lineRates.onRateTextChange(record.journeyId, line.lineKey, value)
+                                  }
+                                />
+                              </td>
+                              <td className="py-2.5 pr-2 text-right tabular-nums font-extrabold text-rose-900">
+                                {amount != null ? formatAmount(amount) : "—"}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -477,34 +632,103 @@ function TransporterRateSection({
               onAdditionalChargeChange={(value) =>
                 onRateChange(journeyRateStorageKey(journeyId, additionalLineKey), value)
               }
+              accent="amber"
             >
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[260px] text-left text-sm">
+              {/* Mobile View: Luxury Item Cards (< sm) */}
+              <div className="space-y-2.5 sm:hidden">
+                {group.rows.map((line) => {
+                  const amount = computeLineAmount(
+                    line.kilometers,
+                    lineRates.rateTextFor(journeyId, line.lineKey)
+                  );
+                  return (
+                    <div
+                      key={line.lineKey}
+                      className="bg-amber-50 border border-amber-200 rounded-2xl p-3 sm:p-4 transition-all hover:bg-amber-50/80 shadow-2xs"
+                    >
+                      {/* Top Row: Vehicle Number (left) & Calculated Amount (right) */}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-slate-900 text-sm truncate">
+                          {line.vehicleNumber}
+                        </span>
+                        <span className="font-extrabold tabular-nums text-amber-900 text-sm shrink-0">
+                          {amount != null ? formatAmount(amount) : "—"}
+                        </span>
+                      </div>
+
+                      {/* Bottom Row: Kilometres (left) & Interactive Rate Input (right) with labels centered */}
+                      <div className="mt-2.5 flex items-start justify-between gap-2 border-t border-amber-200/70 pt-2 px-1 text-xs">
+                        <div className="flex flex-col items-center text-center">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600">
+                            Distance
+                          </span>
+                          <div className="mt-1 flex h-[32px] sm:h-[36px] items-center justify-center">
+                            <span className="text-sm font-bold text-slate-800 tabular-nums">
+                              {line.kilometers != null ? `${Number(line.kilometers).toLocaleString()} km` : "—"}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-center text-center">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600">
+                            Rate/km
+                          </span>
+                          <div className="mt-1 flex h-[32px] sm:h-[36px] items-center gap-1">
+                            <span className="text-xs font-semibold text-amber-700">₹</span>
+                            <RateLineInput
+                              journeyId={journeyId}
+                              lineKey={line.lineKey}
+                              rateText={lineRates.rateTextFor(journeyId, line.lineKey)}
+                              onRateTextChange={(value) =>
+                                lineRates.onRateTextChange(journeyId, line.lineKey, value)
+                              }
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop View: Spacious Non-Scrolling Table (sm and up) */}
+              <div className="hidden sm:block">
+                <table className="w-full text-left text-sm">
                   <thead>
-                    <tr className="text-blue-dark">
-                      {["Vehicle", "Kilometres", "Rate", "Amount"].map((header) => (
-                        <th key={header} className="px-2 py-1.5 text-xs font-semibold">
-                          {header}
-                        </th>
-                      ))}
+                    <tr className="border-b border-amber-200 text-xs font-semibold text-amber-900">
+                      <th className="pb-2 pl-2">Vehicle</th>
+                      <th className="pb-2 px-2">Kilometres</th>
+                      <th className="pb-2 px-2">Rate (₹/km)</th>
+                      <th className="pb-2 pr-2 text-right">Amount</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {group.rows.map((line) => (
-                      <tr key={line.lineKey} className="border-t border-line">
-                        <td className="px-2 py-2">{line.vehicleNumber}</td>
-                        <td className="px-2 py-2 tabular-nums">
-                          {line.kilometers != null ? `${line.kilometers} km` : "—"}
-                        </td>
-                        <RateAmountCells
-                          journeyId={journeyId}
-                          lineKey={line.lineKey}
-                          rateText={lineRates.rateTextFor(journeyId, line.lineKey)}
-                          onRateTextChange={(value) => lineRates.onRateTextChange(journeyId, line.lineKey, value)}
-                          multiplier={line.kilometers}
-                        />
-                      </tr>
-                    ))}
+                  <tbody className="divide-y divide-amber-100">
+                    {group.rows.map((line) => {
+                      const amount = computeLineAmount(
+                        line.kilometers,
+                        lineRates.rateTextFor(journeyId, line.lineKey)
+                      );
+                      return (
+                        <tr key={line.lineKey} className="hover:bg-amber-50/50 transition-colors">
+                          <td className="py-2.5 pl-2 font-semibold text-slate-800">{line.vehicleNumber}</td>
+                          <td className="py-2.5 px-2 tabular-nums font-medium text-slate-700">
+                            {line.kilometers != null ? `${Number(line.kilometers).toLocaleString()} km` : "—"}
+                          </td>
+                          <td className="py-2.5 px-2">
+                            <RateLineInput
+                              journeyId={journeyId}
+                              lineKey={line.lineKey}
+                              rateText={lineRates.rateTextFor(journeyId, line.lineKey)}
+                              onRateTextChange={(value) =>
+                                lineRates.onRateTextChange(journeyId, line.lineKey, value)
+                              }
+                            />
+                          </td>
+                          <td className="py-2.5 pr-2 text-right tabular-nums font-extrabold text-amber-900">
+                            {amount != null ? formatAmount(amount) : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

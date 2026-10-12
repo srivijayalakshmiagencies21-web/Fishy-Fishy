@@ -56,13 +56,16 @@ export function FinanceKpiCards({
   }
 
   const gridClass =
-    variant === "executive" ? "grid grid-cols-1 gap-3 sm:grid-cols-3" : "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5";
+    variant === "executive"
+      ? "grid grid-cols-2 gap-3 md:grid-cols-3"
+      : "grid grid-cols-2 gap-3 md:grid-cols-5";
 
   return (
     <section className="space-y-3">
       <div className={gridClass}>
         {definitions.map((def) => {
           const selected = activeKpi === def.key;
+          const isFullMobile = def.key === "revenue" || def.key === "available-balance";
           return (
             <button
               key={def.key}
@@ -70,6 +73,7 @@ export function FinanceKpiCards({
               onClick={() => toggleKpi(def.key)}
               className={[
                 "flex min-h-[5.5rem] flex-col items-start justify-center gap-0.5 rounded-xl border border-blue/25 bg-blue-soft px-4 py-3 text-left transition-colors hover:border-blue/40",
+                isFullMobile ? "col-span-2 md:col-span-1" : "col-span-1",
                 selected ? "ring-2 ring-blue ring-offset-2 ring-offset-[var(--page)]" : "",
               ].join(" ")}
             >
@@ -82,7 +86,14 @@ export function FinanceKpiCards({
                   def.label
                 )}
               </span>
-              <span className="text-xl font-bold tabular-nums text-blue-dark">{formatAmount(totals[def.key] ?? 0)}</span>
+              <span
+                className={[
+                  "font-bold tabular-nums text-blue-dark",
+                  isFullMobile ? "text-2xl md:text-xl" : "text-xl",
+                ].join(" ")}
+              >
+                {formatAmount(totals[def.key] ?? 0)}
+              </span>
             </button>
           );
         })}
