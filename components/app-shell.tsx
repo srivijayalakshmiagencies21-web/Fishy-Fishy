@@ -42,8 +42,8 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
     .filter((item) => pages.includes(item.key) || (item.key === "users" && role === "Manager"))
     .map((item) => {
       let shortLabel: string = item.label;
-      if (item.key === "finance-manager") shortLabel = "Finance Manager";
-      if (item.key === "finance-executive") shortLabel = "Finance Executive";
+      if (item.key === "finance-manager") shortLabel = "Fin Mgr";
+      if (item.key === "finance-executive") shortLabel = "Fin Exe";
       if (item.key === "start") shortLabel = "Start";
       if (item.key === "transfer") shortLabel = "Transfer";
       if (item.key === "final") shortLabel = "Final";
@@ -105,6 +105,7 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
   useEffect(() => {
     document.querySelector(".canvas-body")?.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [pathname]);
+
 
   useEffect(() => {
     const blockWheelOnFocusedNumber = (event: WheelEvent) => {
@@ -307,26 +308,42 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
       </div>
 
       <nav className="mobile-tabbar" aria-label="Main">
-        {visibleNav.map((item) => (
-          <Link
-            key={item.key}
-            href={item.href}
-            prefetch
-            className="flex flex-1 flex-col items-center justify-start pt-2 pb-1 text-white"
-            onClick={(event) =>
-              openHref(
-                event,
-                item.href,
-                item.key === "masters" ? () => armMaster("accounts") : item.key === "users" ? () => armAdmin("users") : undefined,
-              )
-            }
-          >
-            <span className="rounded-full bg-white/20 p-1.5 flex items-center justify-center">
-              <NavIcon name={item.key} />
-            </span>
-            <span className="mt-1 text-[0.6rem] font-semibold tracking-wide uppercase text-center">{item.shortLabel}</span>
-          </Link>
-        ))}
+        {visibleNav.map((item) => {
+          const active = navIsActive(item.key, pathname);
+          return (
+            <Link
+              key={item.key}
+              href={item.href}
+              prefetch
+              aria-current={active ? "page" : undefined}
+              className={`flex shrink-0 flex-col items-center justify-start pt-2 pb-1.5 text-white transition-opacity ${
+                visibleNav.length > 4 ? "w-[22.5%] min-w-[5.25rem] max-w-[6rem]" : "flex-1"
+              }`}
+              onClick={(event) =>
+                openHref(
+                  event,
+                  item.href,
+                  item.key === "masters" ? () => armMaster("accounts") : item.key === "users" ? () => armAdmin("users") : undefined,
+                )
+              }
+            >
+              <span
+                className={`flex items-center justify-center rounded-full p-1.5 transition-all ${
+                  active ? "bg-white text-[var(--brand-dark)] shadow-sm" : "bg-white/20 text-white"
+                }`}
+              >
+                <NavIcon name={item.key} />
+              </span>
+              <span
+                className={`mt-1 text-[0.58rem] leading-[1.15] tracking-wide uppercase text-center line-clamp-2 px-1 max-w-full ${
+                  active ? "font-bold text-white" : "font-semibold text-white/75"
+                }`}
+              >
+                {item.shortLabel}
+              </span>
+            </Link>
+          );
+        })}
       </nav>
     </div>
   );

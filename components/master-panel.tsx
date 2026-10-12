@@ -640,7 +640,7 @@ function VendorMaster({ rows }: { rows: VendorRow[] }) {
       <EntryCard>
         <form action={action} className="flex flex-wrap items-end gap-4">
           <Field label="Vendor name" name="name" />
-          <label className="block min-w-[200px] flex-1 space-y-1">
+          <label className="block w-full space-y-1 sm:w-auto sm:min-w-[200px] sm:flex-1">
             <span className="label">Contact number</span>
             <input
               name="contact_number"
@@ -656,7 +656,7 @@ function VendorMaster({ rows }: { rows: VendorRow[] }) {
               className={inputClass}
             />
           </label>
-          <label className="block min-w-[160px] space-y-1">
+          <label className="block w-full space-y-1 sm:w-auto sm:min-w-[160px]">
             <span className="label">Vendor type</span>
             <SelectField
               name="vendor_type"
@@ -669,23 +669,21 @@ function VendorMaster({ rows }: { rows: VendorRow[] }) {
               ]}
             />
           </label>
-          <label
-            className={`block min-w-[160px] shrink-0 space-y-1 ${vendorType !== "Transporter" ? "invisible" : ""}`}
-            aria-hidden={vendorType !== "Transporter"}
-          >
-            <span className="label">Transporter scope</span>
-            <SelectField
-              name="transporter_scope"
-              required={vendorType === "Transporter"}
-              disabled={vendorType !== "Transporter"}
-              placeholder="Select scope"
-              autoSelectWhenSingle={false}
-              options={[
-                { value: "Local", label: "Local" },
-                { value: "Non-Local", label: "Non-Local" },
-              ]}
-            />
-          </label>
+          {vendorType === "Transporter" ? (
+            <label className="block w-full space-y-1 sm:w-auto sm:min-w-[160px]">
+              <span className="label">Transporter scope</span>
+              <SelectField
+                name="transporter_scope"
+                required
+                placeholder="Select scope"
+                autoSelectWhenSingle={false}
+                options={[
+                  { value: "Local", label: "Local" },
+                  { value: "Non-Local", label: "Non-Local" },
+                ]}
+              />
+            </label>
+          ) : null}
           <FormFooter error={state?.error} pending={pending} />
         </form>
       </EntryCard>
@@ -998,17 +996,31 @@ function Field({
   required?: boolean;
 }) {
   return (
-    <label className="block min-w-[200px] flex-1 space-y-1">
+    <label className="block w-full space-y-1 sm:w-auto sm:min-w-[200px] sm:flex-1">
       <span className="label">{label}</span>
       <input name={name} type={type} required={required} className={inputClass} />
     </label>
   );
 }
 
-function FormFooter({ error, pending, label = "Add" }: { error?: string; pending: boolean; label?: string }) {
+function FormFooter({
+  error,
+  pending,
+  label = "Add",
+  className,
+}: {
+  error?: string;
+  pending: boolean;
+  label?: string;
+  className?: string;
+}) {
   return (
     <>
-      <button type="submit" disabled={pending} className="btn-primary shrink-0">
+      <button
+        type="submit"
+        disabled={pending}
+        className={className ?? "btn-primary w-full shrink-0 sm:w-auto"}
+      >
         {pending ? "Saving…" : label}
       </button>
       {error ? <p className="w-full text-sm font-medium text-red-600">{error}</p> : null}

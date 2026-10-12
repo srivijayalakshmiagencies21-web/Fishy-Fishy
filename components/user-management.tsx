@@ -289,53 +289,103 @@ export function UserManagement({
             </form>
           ) : null}
 
-          <section className="surface data-card">
-            {loading ? (
+          {loading ? (
+            <div className="surface data-card">
               <div className="skeleton-block skeleton-block--table" />
-            ) : visibleUsers.length === 0 ? (
+            </div>
+          ) : visibleUsers.length === 0 ? (
+            <section className="surface data-card">
               <p className="px-4 py-8 text-sm text-[var(--text-secondary)]">No users yet.</p>
-            ) : (
-              <div className="w-full overflow-x-auto">
-                <table className="data-table min-w-[42rem]">
-                <thead>
-                  <tr>
-                    <th>User</th>
-                    <th className="col-role">Role</th>
-                    <th className="col-joined">Joined</th>
-                    <th className="col-login">Last login</th>
-                    <th className="col-action" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleUsers.map((user) => (
-                    <tr key={user.user_id}>
-                      <td className="font-medium">{displayName(user.email)}</td>
-                      <td>
+            </section>
+          ) : (
+            <>
+              {/* Mobile Card View */}
+              <div className="space-y-3 md:hidden">
+                {visibleUsers.map((user) => {
+                  const canReset = canResetPassword(actorRole, user.role_name, canManageRoles);
+                  const canDeactivate = canDeactivateUser(actorRole, user.role_name, user.user_id === currentUserId, canManageRoles);
+                  const canRemove = canManageRoles && user.user_id !== currentUserId && (actorRole === "Admin" || user.role_name !== "Admin");
+                  const hasActions = canReset || canDeactivate || canRemove;
+
+                  return (
+                    <article key={user.user_id} className="surface flex flex-col gap-3.5 p-4 transition-shadow hover:shadow-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--brand-soft)] text-sm font-bold text-[var(--brand-dark)]">
+                            {displayName(user.email).charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h3 className="truncate text-base font-semibold text-[var(--text-primary)]">
+                                {displayName(user.email)}
+                              </h3>
+                              {user.user_id === currentUserId ? (
+                                <span className="rounded-full bg-[var(--brand-soft)] px-2 py-0.5 text-[0.65rem] font-semibold text-[var(--brand-dark)]">
+                                  You
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                        {!user.active ? (
+                          <span className="shrink-0 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[0.65rem] font-semibold tracking-wider text-red-600 uppercase">
+                            Inactive
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 pt-0.5">
+                        <span className="text-xs font-semibold tracking-wider text-[var(--text-secondary)] uppercase">Role</span>
                         {canManageRoles ? (
-                          <SelectField
-                            compact
-                            name={`role-${user.user_id}`}
-                            defaultValue={user.role_id ?? roles[0]?.id ?? ""}
-                            onChange={(nextRoleId) => assignRole(user.user_id, nextRoleId)}
-                            options={visibleRoles.map((role) => ({ value: role.id, label: role.name }))}
-                          />
+                          <div className="w-48 max-w-[65%]">
+                            <SelectField
+                              compact
+                              name={`role-mobile-${user.user_id}`}
+                              value={user.role_id ?? roles[0]?.id ?? ""}
+                              defaultValue={user.role_id ?? roles[0]?.id ?? ""}
+                              onChange={(nextRoleId) => assignRole(user.user_id, nextRoleId)}
+                              options={visibleRoles.map((role) => ({ value: role.id, label: role.name }))}
+                            />
+                          </div>
                         ) : (
-                          <span>{user.role_name ?? "No role"}</span>
+                          <span className="text-sm font-medium text-[var(--text-primary)]">
+                            {user.role_name ?? "No role"}
+                          </span>
                         )}
-                      </td>
-                      <td className="text-[var(--text-secondary)]" suppressHydrationWarning>{new Date(user.created_at).toLocaleDateString()}</td>
-                      <td className="col-login text-[var(--text-secondary)]" suppressHydrationWarning>{formatLoggedIn(user.last_sign_in_at)}</td>
-                      <td className="col-action">
-                        {resetUserId === user.user_id ? (
-                          <form onSubmit={(event) => resetPassword(event, user.user_id)} className="flex items-center gap-2">
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 border-t border-[var(--border)] pt-3 text-xs">
+                        <div>
+                          <span className="block text-[0.7rem] font-medium tracking-wider text-[var(--text-secondary)] uppercase">Joined</span>
+                          <span className="font-semibold text-[var(--text-primary)]" suppressHydrationWarning>
+                            {new Date(user.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="block text-[0.7rem] font-medium tracking-wider text-[var(--text-secondary)] uppercase">Last login</span>
+                          <span className="font-semibold text-[var(--text-primary)]" suppressHydrationWarning>
+                            {formatLoggedIn(user.last_sign_in_at)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {resetUserId === user.user_id ? (
+                        <form
+                          onSubmit={(event) => resetPassword(event, user.user_id)}
+                          className="space-y-2 border-t border-[var(--border)] pt-3"
+                        >
+                          <span className="text-xs font-medium text-[var(--text-secondary)]">
+                            New password for {displayName(user.email)}
+                          </span>
+                          <div className="flex items-center gap-2">
                             <input
-                              className="input-field input-inline"
+                              className="input-field min-w-0 flex-1"
                               type="password"
                               required
                               minLength={8}
                               value={nextPassword}
                               onChange={(event) => setNextPassword(event.target.value)}
-                              placeholder="New password"
+                              placeholder="Min 8 characters"
                             />
                             <button type="submit" className="btn-primary shrink-0" disabled={saving}>
                               {saving ? "Saving…" : "Save"}
@@ -350,61 +400,196 @@ export function UserManagement({
                             >
                               Cancel
                             </button>
-                          </form>
-                        ) : confirmUserId === user.user_id ? (
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-[var(--text-secondary)]">Remove {displayName(user.email)}?</span>
-                            <button type="button" className="pill pill-red" disabled={saving} onClick={() => removeUser(user.user_id)}>
+                          </div>
+                        </form>
+                      ) : confirmUserId === user.user_id ? (
+                        <div className="flex items-center justify-between gap-2 border-t border-[var(--border)] pt-3">
+                          <span className="text-sm font-medium text-[var(--text-secondary)]">
+                            Remove {displayName(user.email)}?
+                          </span>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <button
+                              type="button"
+                              className="pill pill-red"
+                              disabled={saving}
+                              onClick={() => removeUser(user.user_id)}
+                            >
                               {saving ? "Removing…" : "Remove"}
                             </button>
-                            <button type="button" className="btn-quiet shrink-0" disabled={saving} onClick={() => setConfirmUserId(null)}>
+                            <button
+                              type="button"
+                              className="btn-quiet shrink-0"
+                              disabled={saving}
+                              onClick={() => setConfirmUserId(null)}
+                            >
                               Cancel
                             </button>
                           </div>
-                        ) : (
-                          <div className="flex items-center justify-start gap-2">
-                            {user.active ? null : <span className="text-xs font-semibold tracking-wide text-[var(--text-muted)] uppercase">Inactive</span>}
-                            {canResetPassword(actorRole, user.role_name, canManageRoles) ? (
-                              <button
-                                type="button"
-                                className="pill pill-blue"
-                                onClick={() => {
-                                  setResetUserId(user.user_id);
-                                  setConfirmUserId(null);
-                                  setNextPassword("");
-                                }}
-                              >
-                                Reset password
-                              </button>
-                            ) : null}
-                            {canDeactivateUser(actorRole, user.role_name, user.user_id === currentUserId, canManageRoles) ? (
-                              <button
-                                type="button"
-                                className={user.active ? "pill pill-red" : "pill pill-green"}
-                                onClick={() => setActive(user.user_id, user.active)}
-                              >
-                                {user.active ? "Deactivate" : "Activate"}
-                              </button>
-                            ) : null}
-                            {canManageRoles && user.user_id !== currentUserId && (actorRole === "Admin" || user.role_name !== "Admin") ? (
-                              <button type="button" className="pill pill-blue" onClick={() => {
+                        </div>
+                      ) : hasActions ? (
+                        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--border)] pt-3">
+                          {canReset ? (
+                            <button
+                              type="button"
+                              className="pill pill-blue"
+                              onClick={() => {
+                                setResetUserId(user.user_id);
+                                setConfirmUserId(null);
+                                setNextPassword("");
+                              }}
+                            >
+                              Reset password
+                            </button>
+                          ) : null}
+                          {canDeactivate ? (
+                            <button
+                              type="button"
+                              className={user.active ? "pill pill-red" : "pill pill-green"}
+                              onClick={() => setActive(user.user_id, user.active)}
+                            >
+                              {user.active ? "Deactivate" : "Activate"}
+                            </button>
+                          ) : null}
+                          {canRemove ? (
+                            <button
+                              type="button"
+                              className="pill pill-blue"
+                              onClick={() => {
                                 setResetUserId(null);
                                 setNextPassword("");
                                 setConfirmUserId(user.user_id);
-                              }}>
-                                Remove
-                              </button>
-                            ) : null}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                              }}
+                            >
+                              Remove
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+
+              {/* Desktop Table View */}
+              <section className="surface data-card hidden md:block">
+                <div className="w-full overflow-x-auto">
+                  <table className="data-table min-w-[42rem]">
+                    <thead>
+                      <tr>
+                        <th>User</th>
+                        <th className="col-role">Role</th>
+                        <th className="col-joined">Joined</th>
+                        <th className="col-login">Last login</th>
+                        <th className="col-action" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleUsers.map((user) => {
+                        const canReset = canResetPassword(actorRole, user.role_name, canManageRoles);
+                        const canDeactivate = canDeactivateUser(actorRole, user.role_name, user.user_id === currentUserId, canManageRoles);
+                        const canRemove = canManageRoles && user.user_id !== currentUserId && (actorRole === "Admin" || user.role_name !== "Admin");
+
+                        return (
+                          <tr key={user.user_id}>
+                            <td className="font-medium">{displayName(user.email)}</td>
+                            <td>
+                              {canManageRoles ? (
+                                <SelectField
+                                  compact
+                                  name={`role-${user.user_id}`}
+                                  value={user.role_id ?? roles[0]?.id ?? ""}
+                                  defaultValue={user.role_id ?? roles[0]?.id ?? ""}
+                                  onChange={(nextRoleId) => assignRole(user.user_id, nextRoleId)}
+                                  options={visibleRoles.map((role) => ({ value: role.id, label: role.name }))}
+                                />
+                              ) : (
+                                <span>{user.role_name ?? "No role"}</span>
+                              )}
+                            </td>
+                            <td className="text-[var(--text-secondary)]" suppressHydrationWarning>{new Date(user.created_at).toLocaleDateString()}</td>
+                            <td className="col-login text-[var(--text-secondary)]" suppressHydrationWarning>{formatLoggedIn(user.last_sign_in_at)}</td>
+                            <td className="col-action">
+                              {resetUserId === user.user_id ? (
+                                <form onSubmit={(event) => resetPassword(event, user.user_id)} className="flex items-center gap-2">
+                                  <input
+                                    className="input-field input-inline"
+                                    type="password"
+                                    required
+                                    minLength={8}
+                                    value={nextPassword}
+                                    onChange={(event) => setNextPassword(event.target.value)}
+                                    placeholder="New password"
+                                  />
+                                  <button type="submit" className="btn-primary shrink-0" disabled={saving}>
+                                    {saving ? "Saving…" : "Save"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn-quiet shrink-0"
+                                    onClick={() => {
+                                      setResetUserId(null);
+                                      setNextPassword("");
+                                    }}
+                                  >
+                                    Cancel
+                                  </button>
+                                </form>
+                              ) : confirmUserId === user.user_id ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm text-[var(--text-secondary)]">Remove {displayName(user.email)}?</span>
+                                  <button type="button" className="pill pill-red" disabled={saving} onClick={() => removeUser(user.user_id)}>
+                                    {saving ? "Removing…" : "Remove"}
+                                  </button>
+                                  <button type="button" className="btn-quiet shrink-0" disabled={saving} onClick={() => setConfirmUserId(null)}>
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-start gap-2">
+                                  {user.active ? null : <span className="text-xs font-semibold tracking-wide text-[var(--text-muted)] uppercase">Inactive</span>}
+                                  {canReset ? (
+                                    <button
+                                      type="button"
+                                      className="pill pill-blue"
+                                      onClick={() => {
+                                        setResetUserId(user.user_id);
+                                        setConfirmUserId(null);
+                                        setNextPassword("");
+                                      }}
+                                    >
+                                      Reset password
+                                    </button>
+                                  ) : null}
+                                  {canDeactivate ? (
+                                    <button
+                                      type="button"
+                                      className={user.active ? "pill pill-red" : "pill pill-green"}
+                                      onClick={() => setActive(user.user_id, user.active)}
+                                    >
+                                      {user.active ? "Deactivate" : "Activate"}
+                                    </button>
+                                  ) : null}
+                                  {canRemove ? (
+                                    <button type="button" className="pill pill-blue" onClick={() => {
+                                      setResetUserId(null);
+                                      setNextPassword("");
+                                      setConfirmUserId(user.user_id);
+                                    }}>
+                                      Remove
+                                    </button>
+                                  ) : null}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </>
           )}
-          </section>
         </div>
       ) : (
         <div key="roles" className="tab-panel space-y-5">

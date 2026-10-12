@@ -27,7 +27,7 @@ export const masterLinks = [
   {
     slug: "transactions",
     label: "Transactions",
-    description: "Categories used to classify money in, out, and transfers.",
+    description: "Money In, Out & Transfers categories",
   },
 ] as const;
 

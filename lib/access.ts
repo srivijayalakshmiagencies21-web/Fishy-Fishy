@@ -1,5 +1,4 @@
 export const appPages = [
-  { key: "masters", label: "Masters", href: "/masters/accounts", description: "Reference lists used across the workspace." },
   { key: "timeline", label: "Timeline", href: "/timeline", description: "Track active journeys across all points." },
   {
     key: "journey-rates",
@@ -13,6 +12,8 @@ export const appPages = [
     href: "/finance-manager",
     description: "Ledger and cost-nature KPIs for managers.",
   },
+  { key: "masters", label: "Masters", href: "/masters/accounts", description: "Reference lists used across the workspace." },
+  { key: "users", label: "Users & Roles", href: "/admin/users", description: "Accounts and the pages each role can open." },
   {
     key: "finance-executive",
     label: "Finance Executive",
@@ -22,7 +23,6 @@ export const appPages = [
   { key: "start", label: "Start Point", href: "/start", description: "Where a load leaves from." },
   { key: "transfer", label: "Transfer Point", href: "/transfer", description: "Where a load changes hands." },
   { key: "final", label: "Final Point", href: "/final", description: "Where a load arrives." },
-  { key: "users", label: "Users & Roles", href: "/admin/users", description: "Accounts and the pages each role can open." },
 ] as const;
 
 export type AppPageKey = (typeof appPages)[number]["key"];
