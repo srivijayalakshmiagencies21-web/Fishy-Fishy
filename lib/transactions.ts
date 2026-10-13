@@ -1,28 +1,55 @@
 import type { TransactionCategoryRow } from "@/lib/masters";
+import { todayIsoDateInAppTimeZone } from "@/lib/ist-dates";
 
 export type TransactionAllocationFields = {
   showDistrict: boolean;
   showJourney: boolean;
   requireDistrict: boolean;
+  showFinancialYear: boolean;
+  requireFinancialYear: boolean;
 };
 
-/** District / journey visibility from cost nature (parent) and default allocation (child). */
+/** District / journey / FY visibility from category, allocation, and transaction type. */
 export function transactionAllocationFields(
   category: Pick<TransactionCategoryRow, "cost_nature" | "default_allocation"> | null | undefined,
+  txnType?: TxnType | null,
 ): TransactionAllocationFields {
   if (!category) {
-    return { showDistrict: false, showJourney: false, requireDistrict: false };
+    return {
+      showDistrict: false,
+      showJourney: false,
+      requireDistrict: false,
+      showFinancialYear: false,
+      requireFinancialYear: false,
+    };
   }
 
   if (category.cost_nature === "Non-Cost" || category.cost_nature === "Overhead") {
-    return { showDistrict: false, showJourney: false, requireDistrict: false };
+    return {
+      showDistrict: false,
+      showJourney: false,
+      requireDistrict: false,
+      showFinancialYear: false,
+      requireFinancialYear: false,
+    };
   }
+
+  let showDistrict = true;
+  let showJourney = false;
+  let requireDistrict = true;
 
   if (category.default_allocation === "project") {
-    return { showDistrict: true, showJourney: true, requireDistrict: true };
+    showJourney = true;
   }
 
-  return { showDistrict: true, showJourney: false, requireDistrict: true };
+  const showFinancialYear = txnType === "in" && showDistrict;
+  return {
+    showDistrict,
+    showJourney,
+    requireDistrict,
+    showFinancialYear,
+    requireFinancialYear: showFinancialYear,
+  };
 }
 
 export type TxnType = "in" | "out" | "transfer";
@@ -221,7 +248,5 @@ export function formatAmount(amount: number) {
 }
 
 export function todayIsoDate() {
-  const now = new Date();
-  const offset = now.getTimezoneOffset() * 60_000;
-  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
+  return todayIsoDateInAppTimeZone();
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { BodyPortal } from "@/components/fixed-overlay";
+
 type FloatingAddVariant = "blue" | "rose";
 
 const variantStyles: Record<FloatingAddVariant, string> = {
@@ -26,22 +28,25 @@ export function FloatingAddButton({
 }) {
   const bottomClass =
     mobileBottom === "tab"
-      ? "bottom-[calc(var(--bottom-nav-height)+0.75rem)]"
-      : "bottom-[calc(var(--bottom-nav-height)+4.75rem)]";
+      ? "bottom-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom,0px)+0.75rem)]"
+      : "bottom-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom,0px)+4.75rem)]";
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      aria-label={ariaLabel}
-      className={`fixed z-[45] md:hidden flex h-12 w-12 items-center justify-center rounded-full border text-white shadow-lg transition-transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 right-4 ${bottomClass} ${variantStyles[variant]}`}
-    >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6" aria-hidden>
-        <line x1="12" y1="5" x2="12" y2="19" />
-        <line x1="5" y1="12" x2="19" y2="12" />
-      </svg>
-    </button>
+    <BodyPortal>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        title={title}
+        aria-label={ariaLabel}
+        className={`fixed z-[45] md:hidden flex h-12 w-12 items-center justify-center rounded-full border text-white shadow-lg transition-transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 right-4 ${bottomClass} ${variantStyles[variant]}`}
+        style={{ WebkitTransform: "translateZ(0)", transform: "translateZ(0)" }}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6" aria-hidden>
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+      </button>
+    </BodyPortal>
   );
 }

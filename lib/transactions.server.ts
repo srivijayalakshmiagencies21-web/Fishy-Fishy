@@ -11,6 +11,9 @@ import {
   type TxnType,
 } from "@/lib/transactions";
 import type { CategoryMeta, FinanceKpiVariant, FinanceKpiWallet } from "@/lib/finance-kpi";
+import { loadFinancialYears } from "@/lib/financial-year.server";
+import type { FinancialYear } from "@/lib/financial-year";
+import type { PartyVendorRecord } from "@/lib/finance-party-vendors";
 import { getSessionUser } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 
@@ -33,10 +36,13 @@ export type TransactionsPageData = {
   journeys: JourneyPickRow[];
   districts: NamedRow[];
   partyVendors: string[];
+  partyVendorRecords: PartyVendorRecord[];
   partySocieties: string[];
   categoryMetaByName: Record<string, CategoryMeta>;
   financeKpiVariant: FinanceKpiVariant;
   financeKpiWallets: FinanceKpiWallet[];
+  financialYears: FinancialYear[];
+  districtIdsByFinancialYear: Record<number, number[]>;
   error: string | null;
 };
 
@@ -136,6 +142,8 @@ export async function loadTransactionsPageData(kpiVariant: FinanceKpiVariant): P
     vendorsResult,
     linkUsersResult,
     allCategoriesMetaResult,
+    financialYears,
+    fyDistrictsResult,
   ] = await Promise.all([
     supabase
       .from("transactions")
@@ -166,9 +174,11 @@ export async function loadTransactionsPageData(kpiVariant: FinanceKpiVariant): P
       .limit(500),
     supabase.from("districts").select("id, name").order("name"),
     supabase.from("societies").select("name").order("name"),
-    supabase.from("vendors").select("name").order("name"),
+    supabase.from("vendors").select("name, vendor_type, transporter_scope").order("name"),
     loadAccountLinkUsers(supabase),
     supabase.from("transaction_categories").select("name, cost_nature, default_allocation"),
+    loadFinancialYears(),
+    supabase.from("financial_year_districts").select("financial_year_id, district_id"),
   ]);
 
   let categories: TransactionCategoryRow[] = [];
@@ -190,6 +200,7 @@ export async function loadTransactionsPageData(kpiVariant: FinanceKpiVariant): P
     vendorsResult.error?.message ??
     linkUsersResult.userLoadError ??
     allCategoriesMetaResult.error?.message ??
+    fyDistrictsResult.error?.message ??
     null;
 
   const categoryMetaByName: Record<string, CategoryMeta> = {};
@@ -277,11 +288,33 @@ export async function loadTransactionsPageData(kpiVariant: FinanceKpiVariant): P
         districtIds: journeyTruckDistrictIds(trucks),
       };
     }),
+    partyVendorRecords: (vendorsResult.data ?? []).map((row) => ({
+      name: row.name,
+      vendorType: row.vendor_type,
+      transporterScope: row.transporter_scope,
+    })),
     partyVendors: (vendorsResult.data ?? []).map((row) => row.name).filter(Boolean),
     partySocieties: (societiesResult.data ?? []).map((row) => row.name).filter(Boolean),
     categoryMetaByName,
     financeKpiVariant: kpiVariant,
     financeKpiWallets,
+    financialYears,
+    districtIdsByFinancialYear: buildDistrictIdsByFinancialYear(fyDistrictsResult.data),
     error,
   };
+}
+
+function buildDistrictIdsByFinancialYear(
+  rows: { financial_year_id: number; district_id: number }[] | null | undefined,
+): Record<number, number[]> {
+  const map: Record<number, number[]> = {};
+  for (const row of rows ?? []) {
+    const fyId = row.financial_year_id;
+    const districtId = row.district_id;
+    if (!fyId || !districtId) continue;
+    const list = map[fyId] ?? [];
+    list.push(districtId);
+    map[fyId] = list;
+  }
+  return map;
 }

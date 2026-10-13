@@ -1,6 +1,9 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useActionState, useCallback, useEffect, useRef, useState } from "react";
+import { ModalOverlay } from "@/components/fixed-overlay";
+import { refreshMaster } from "@/components/master-cache";
 import type { FormState } from "@/app/(workspace)/masters/actions";
 import {
   addSociety,
@@ -331,7 +334,7 @@ function AccountModal({
   }, [pending, state, onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-blue-dark/40 p-4 backdrop-blur-sm">
+    <ModalOverlay className="z-50 flex items-center justify-center bg-blue-dark/40 p-4 backdrop-blur-sm">
       <div className="w-full max-w-lg rounded-2xl border border-line bg-white shadow-xl">
         <div className="border-b border-line px-5 py-4">
           <h2 className="text-lg font-bold text-blue-dark">Edit account</h2>
@@ -383,7 +386,7 @@ function AccountModal({
           </button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 
@@ -523,7 +526,7 @@ function TransactionCategoryModal({
   }, [pending, state, onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-blue-dark/40 p-4 backdrop-blur-sm">
+    <ModalOverlay className="z-50 flex items-center justify-center bg-blue-dark/40 p-4 backdrop-blur-sm">
       <div className="w-full max-w-lg rounded-2xl border border-line bg-white shadow-xl">
         <div className="border-b border-line px-5 py-4">
           <h2 className="text-lg font-bold text-blue-dark">Edit transaction category</h2>
@@ -574,7 +577,7 @@ function TransactionCategoryModal({
           </button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 
@@ -590,7 +593,7 @@ function NamedMaster({
   fieldName: string;
   fieldLabel: string;
   action: (state: FormState, formData: FormData) => Promise<FormState>;
-  deleteAction: (formData: FormData) => Promise<void>;
+  deleteAction: (state: FormState, formData: FormData) => Promise<FormState>;
   rows: NamedRow[];
   empty: string;
   addLabel: string;
@@ -867,13 +870,21 @@ function DistrictCard({ district }: { district: DistrictRow }) {
 }
 
 function DistrictModal({ district, onClose }: { district: DistrictRow, onClose: () => void }) {
+  const [districtDeleteError, setDistrictDeleteError] = useState<string | null>(null);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-blue-dark/40 p-4 backdrop-blur-sm">
+    <ModalOverlay className="z-50 flex items-center justify-center bg-blue-dark/40 p-4 backdrop-blur-sm">
       <div className="surface flex max-h-full w-full max-w-2xl flex-col overflow-hidden shadow-2xl">
         <div className="flex items-center justify-between border-b border-line bg-blue-soft/30 px-5 py-4">
           <h2 className="text-lg font-bold text-blue-dark">Edit {district.name}</h2>
           <div className="flex items-center gap-3">
-            <DeleteButton action={deleteDistrict} id={district.id} label={district.name} />
+            <DeleteButton
+              action={deleteDistrict}
+              id={district.id}
+              label={district.name}
+              onSuccess={onClose}
+              onError={setDistrictDeleteError}
+            />
             <button type="button" onClick={onClose} className="rounded-full p-1.5 text-muted hover:bg-black/5 hover:text-ink">
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
@@ -881,7 +892,10 @@ function DistrictModal({ district, onClose }: { district: DistrictRow, onClose: 
             </button>
           </div>
         </div>
-        
+        {districtDeleteError ? (
+          <p className="border-b border-line bg-red-50 px-5 py-2 text-sm font-medium text-red-700">{districtDeleteError}</p>
+        ) : null}
+
         <div className="flex-1 overflow-y-auto p-5">
           <div className="grid gap-8 sm:grid-cols-2">
             <div>
@@ -913,13 +927,7 @@ function DistrictModal({ district, onClose }: { district: DistrictRow, onClose: 
                 {district.companies.map((company) => (
                   <li key={company.id} className="flex items-center justify-between gap-3 rounded-lg border border-line bg-page px-3 py-2 text-sm">
                     <span className="font-medium break-words">{company.label}</span>
-                    <form action={unlinkCompany}>
-                      <input type="hidden" name="district_id" value={district.id} />
-                      <input type="hidden" name="company_id" value={company.id} />
-                      <button type="submit" className="shrink-0 py-1 text-sm font-semibold text-blue hover:underline">
-                        Remove
-                      </button>
-                    </form>
+                    <UnlinkCompanyButton districtId={district.id} companyId={company.id} companyLabel={company.label} />
                   </li>
                 ))}
                 {district.companies.length === 0 ? (
@@ -936,7 +944,7 @@ function DistrictModal({ district, onClose }: { district: DistrictRow, onClose: 
           </button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 
@@ -1075,21 +1083,101 @@ function RowsCard({
   );
 }
 
+function useMasterRefreshAfterMutation() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const masterSlug = pathname.split("/").filter(Boolean).at(-1) ?? "";
+
+  return useCallback(async () => {
+    if (masterSlug) await refreshMaster(masterSlug);
+    router.refresh();
+  }, [masterSlug, router]);
+}
+
 function DeleteButton({
   action,
   id,
   label,
+  onSuccess,
+  onError,
 }: {
-  action: (formData: FormData) => Promise<void>;
+  action: (state: FormState, formData: FormData) => Promise<FormState>;
   id: number;
   label: string;
+  onSuccess?: () => void;
+  onError?: (message: string | null) => void;
 }) {
+  const [state, formAction, pending] = useActionState(action, null);
+  const refreshAfterMutation = useMasterRefreshAfterMutation();
+  const wasPendingRef = useRef(false);
+
+  useEffect(() => {
+    if (wasPendingRef.current && !pending) {
+      if (state?.error) {
+        onError?.(state.error);
+      } else {
+        onError?.(null);
+        void refreshAfterMutation().then(() => onSuccess?.());
+      }
+    }
+    wasPendingRef.current = pending;
+  }, [pending, state, onSuccess, onError, refreshAfterMutation]);
+
   return (
-    <form action={action}>
-      <input type="hidden" name="id" value={id} />
-      <button type="submit" className="shrink-0 py-1 text-sm font-semibold text-blue hover:underline" aria-label={`Remove ${label}`}>
-        Remove
-      </button>
-    </form>
+    <div className="flex flex-col items-end gap-0.5">
+      <form action={formAction}>
+        <input type="hidden" name="id" value={id} />
+        <button
+          type="submit"
+          disabled={pending}
+          className="shrink-0 py-1 text-sm font-semibold text-blue hover:underline disabled:opacity-50"
+          aria-label={`Remove ${label}`}
+        >
+          {pending ? "…" : "Remove"}
+        </button>
+      </form>
+      {state?.error && !onError ? (
+        <p className="max-w-[12rem] text-right text-xs font-medium text-red-600">{state.error}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function UnlinkCompanyButton({
+  districtId,
+  companyId,
+  companyLabel,
+}: {
+  districtId: number;
+  companyId: number;
+  companyLabel: string;
+}) {
+  const [state, formAction, pending] = useActionState(unlinkCompany, null);
+  const refreshAfterMutation = useMasterRefreshAfterMutation();
+  const wasPendingRef = useRef(false);
+
+  useEffect(() => {
+    if (wasPendingRef.current && !pending && state === null) {
+      void refreshAfterMutation();
+    }
+    wasPendingRef.current = pending;
+  }, [pending, state, refreshAfterMutation]);
+
+  return (
+    <div className="flex flex-col items-end gap-0.5">
+      <form action={formAction}>
+        <input type="hidden" name="district_id" value={districtId} />
+        <input type="hidden" name="company_id" value={companyId} />
+        <button
+          type="submit"
+          disabled={pending}
+          className="shrink-0 py-1 text-sm font-semibold text-blue hover:underline disabled:opacity-50"
+          aria-label={`Remove ${companyLabel}`}
+        >
+          {pending ? "…" : "Remove"}
+        </button>
+      </form>
+      {state?.error ? <p className="max-w-[12rem] text-right text-xs font-medium text-red-600">{state.error}</p> : null}
+    </div>
   );
 }

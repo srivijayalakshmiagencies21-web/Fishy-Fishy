@@ -1,4 +1,5 @@
 const STORAGE_KEY = "fishy-finance-party-recents";
+const PC_STORAGE_KEY = "fishy-finance-party-pc-recents";
 const MAX_RECENTS = 40;
 
 export function masterPartyNameSet(vendors: string[], districts: string[], societies: string[]): Set<string> {
@@ -10,10 +11,10 @@ export function masterPartyNameSet(vendors: string[], districts: string[], socie
   return set;
 }
 
-export function readCustomParties(): string[] {
+function readStoredPartyList(key: string): string[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(key);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
@@ -21,6 +22,15 @@ export function readCustomParties(): string[] {
   } catch {
     return [];
   }
+}
+
+export function readCustomParties(): string[] {
+  return readStoredPartyList(STORAGE_KEY);
+}
+
+/** Free-typed PC category parties (not in Masters societies). */
+export function readPcCustomParties(): string[] {
+  return readStoredPartyList(PC_STORAGE_KEY);
 }
 
 /** Remember free-typed party names that are not in Masters lists. */
@@ -33,16 +43,24 @@ function isListedInMasters(name: string, masterNames: Set<string>) {
   return false;
 }
 
-export function rememberCustomParty(name: string, masterNames: Set<string>) {
+function rememberPartyInStore(key: string, name: string, masterNames: Set<string>) {
   if (typeof window === "undefined") return;
   const trimmed = name.trim();
   if (!trimmed || isListedInMasters(trimmed, masterNames)) return;
 
-  const existing = readCustomParties().filter((item) => item !== trimmed);
+  const existing = readStoredPartyList(key).filter((item) => item !== trimmed);
   existing.unshift(trimmed);
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(existing.slice(0, MAX_RECENTS)));
+    window.localStorage.setItem(key, JSON.stringify(existing.slice(0, MAX_RECENTS)));
   } catch {
     /* ignore quota / private mode */
   }
+}
+
+export function rememberCustomParty(name: string, masterNames: Set<string>) {
+  rememberPartyInStore(STORAGE_KEY, name, masterNames);
+}
+
+export function rememberPcCustomParty(name: string, societyNames: Set<string>) {
+  rememberPartyInStore(PC_STORAGE_KEY, name, societyNames);
 }

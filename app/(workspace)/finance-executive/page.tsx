@@ -20,7 +20,10 @@ export default async function ExecutiveFinancePage() {
         categories={data.categories}
         journeys={data.journeys}
         districts={data.districts}
+        financialYears={data.financialYears}
+        districtIdsByFinancialYear={data.districtIdsByFinancialYear}
         partyVendors={data.partyVendors}
+        partyVendorRecords={data.partyVendorRecords}
         partySocieties={data.partySocieties}
         categoryMetaByName={data.categoryMetaByName}
         financeKpiVariant={data.financeKpiVariant}

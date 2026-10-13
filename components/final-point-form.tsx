@@ -19,6 +19,7 @@ import {
   startFinalUnload,
 } from "@/app/(workspace)/final/actions";
 import { scrollCanvasToTop } from "@/lib/scroll-canvas";
+import { FixedOverlay, ModalOverlay } from "@/components/fixed-overlay";
 import { FloatingAddButton } from "@/components/floating-add-button";
 import { compressOdometerPhotoClient } from "@/lib/odometer-image-compress.client";
 import { submitCompressedFormAction } from "@/lib/submit-compressed-form-action";
@@ -1657,7 +1658,7 @@ export function FinalPointForm({
               </button>
               {openDropdownId === journey.id ? (
                 <>
-                  <div className="fixed inset-0 z-10" onClick={() => setOpenDropdownId(null)} />
+                  <FixedOverlay className="z-10" onClick={() => setOpenDropdownId(null)} aria-hidden />
                   <div className="absolute right-0 z-20 mt-1 w-36 overflow-hidden rounded-lg border border-gray-100 bg-white py-1 shadow-lg">
                     <button
                       type="button"
@@ -1738,7 +1739,7 @@ export function FinalPointForm({
       </JourneyPointLaneSection>
 
       {deleteUnloadJourneyId ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+        <ModalOverlay className="z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-2xl border border-gray-100 bg-white p-6 shadow-2xl">
             <h3 className="mb-2 text-xl font-bold text-gray-900">Delete final unload?</h3>
             <p className="mb-6 text-sm leading-relaxed text-gray-500">
@@ -1764,7 +1765,7 @@ export function FinalPointForm({
               </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       ) : null}
     </div>
   );

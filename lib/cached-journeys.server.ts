@@ -11,6 +11,7 @@ import {
 } from "@/lib/journey-cards";
 import {
   overviewFinalDistrict,
+  overviewFinalDistrictId,
   overviewSkipsTransfer,
   overviewStartLocation,
   overviewTransferLocation,
@@ -190,6 +191,7 @@ async function loadOverviewJourneysRaw(supabase: SupabaseServerClient): Promise<
       truckCounts: overviewTruckCounts(trucks),
       transferLocation: overviewTransferLocation(trucks),
       finalDistrict: overviewFinalDistrict(trucks),
+      finalDistrictId: overviewFinalDistrictId(trucks),
     };
   });
   rows.reverse();

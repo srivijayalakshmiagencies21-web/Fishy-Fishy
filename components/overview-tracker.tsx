@@ -13,6 +13,8 @@ import {
 import { hasPersistedTransferRecording } from "@/lib/journey-transfer-recording";
 import { JourneyPhase, normalizeJourneyPhase, type JourneyPhaseValue } from "@/lib/journey-phase";
 import type { OverviewStage } from "@/lib/overview-stage-summary";
+import { TimelineDistrictQtyCard } from "@/components/timeline-district-qty-card";
+import type { DistrictFulfillmentRow } from "@/lib/overview-timeline";
 import type { OverviewJourneyRow } from "@/lib/overview-types";
 
 type StopStatus = "done" | "active" | "upcoming";
@@ -306,7 +308,7 @@ function JourneyCard({
   const isClosed = phase === JourneyPhase.Closed;
 
   return (
-    <section className="surface overflow-hidden">
+    <section className="surface rounded-2xl border border-line transition-all duration-200">
       <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
         <div className="min-w-0 flex-1">
           <h2 className="text-base font-bold text-blue-dark">Journey #{journey.db_id}</h2>
@@ -318,42 +320,70 @@ function JourneyCard({
           </span>
         ) : null}
       </header>
-      <JourneyTrack journey={journey} onOpenStage={(stage) => onOpenStage(journey.id, stage)} />
-      {ledgerOpen ? <OverviewJourneyLedger journey={journey} /> : null}
-      <button
-        type="button"
-        onClick={() => setLedgerOpen((open) => !open)}
-        aria-expanded={ledgerOpen}
-        aria-label={ledgerOpen ? "Collapse ledger" : "Expand ledger"}
-        title={ledgerOpen ? "Collapse ledger" : "Expand ledger"}
-        className="flex w-full items-center justify-center border-t border-line bg-gray-50/60 py-2.5 text-gray-400 transition-colors hover:bg-blue-soft/40 hover:text-blue-600"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={`h-4 w-4 transition-transform duration-200 ${ledgerOpen ? "rotate-180 text-blue-600" : ""}`}
-          aria-hidden
+      <div className={`relative ${ledgerOpen ? "border-b border-line" : ""}`}>
+        <JourneyTrack journey={journey} onOpenStage={(stage) => onOpenStage(journey.id, stage)} />
+        {/* Arrow Floating on the Bottom Line in Centre */}
+        <button
+          type="button"
+          onClick={() => setLedgerOpen((open) => !open)}
+          aria-expanded={ledgerOpen}
+          aria-label={ledgerOpen ? "Collapse ledger" : "Expand ledger"}
+          title={ledgerOpen ? "Collapse ledger" : "Expand ledger"}
+          className="group absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 z-10 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue rounded-full"
         >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
+          <div
+            className={`flex h-6 w-6 items-center justify-center rounded-full border border-line bg-white text-blue-dark transition-all duration-200 shadow-2xs group-hover:border-blue/50 group-hover:shadow-xs ${
+              ledgerOpen ? "rotate-180 bg-blue-soft text-blue" : ""
+            }`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-3.5 w-3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              aria-hidden
+            >
+              <path d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </button>
+      </div>
+      {ledgerOpen ? (
+        <div className="pt-2">
+          <OverviewJourneyLedger journey={journey} />
+        </div>
+      ) : null}
     </section>
   );
 }
 
-export function OverviewTracker({ journeys }: { journeys: OverviewJourneyRow[] }) {
+export function OverviewTracker({
+  journeys,
+  districtFulfillmentRows,
+  financialYearLabel,
+}: {
+  journeys: OverviewJourneyRow[];
+  districtFulfillmentRows: DistrictFulfillmentRow[];
+  financialYearLabel: string | null;
+}) {
   const [laneView, setLaneView] = useState<JourneyPointLaneView>("in_progress");
   const [summaryOpen, setSummaryOpen] = useState<{ journeyId: string; stage: OverviewStage } | null>(null);
 
   if (journeys.length === 0) {
     return (
-      <div className="surface p-10 text-center">
-        <p className="text-sm font-medium text-gray-700">No journeys yet</p>
-        <p className="mt-1 text-xs text-muted">Journeys appear here once they are started.</p>
+      <div className="space-y-4">
+        <TimelineDistrictQtyCard financialYearLabel={financialYearLabel} rows={districtFulfillmentRows} />
+        <div className="surface p-10 text-center">
+          <p className="text-sm font-medium text-gray-700">
+            {financialYearLabel ? `No journeys in ${financialYearLabel}` : "No journeys yet"}
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            {financialYearLabel
+              ? "Try another financial year or start a journey in this period."
+              : "Journeys appear here once they are started."}
+          </p>
+        </div>
       </div>
     );
   }
@@ -368,6 +398,7 @@ export function OverviewTracker({ journeys }: { journeys: OverviewJourneyRow[] }
   return (
     <>
       <div className="space-y-6">
+        <TimelineDistrictQtyCard financialYearLabel={financialYearLabel} rows={districtFulfillmentRows} />
         <JourneyPointLaneSwitcher
           value={laneView}
           onChange={setLaneView}

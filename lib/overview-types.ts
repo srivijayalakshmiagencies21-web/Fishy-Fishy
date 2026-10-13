@@ -5,4 +5,5 @@ export type OverviewJourneyRow = JourneySummary & {
   truckCounts: { start: number; transfer: number; final: number };
   transferLocation: string;
   finalDistrict: string;
+  finalDistrictId: number | null;
 };

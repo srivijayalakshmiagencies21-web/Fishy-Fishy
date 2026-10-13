@@ -57,43 +57,56 @@ async function resolveSocietyId(
   districtId: number,
   society_id: number | null | undefined,
   society_name: string | undefined,
-): Promise<{ id: number } | { error: string }> {
-  if (society_id) return { id: society_id };
+): Promise<{ id: number; name: string } | { error: string }> {
+  if (society_id) {
+    const { data, error } = await supabase
+      .from("societies")
+      .select("id, name")
+      .eq("id", society_id)
+      .maybeSingle();
+    if (error) return { error: error.message };
+    if (!data?.id) return { error: "Choose a valid society." };
+    return { id: data.id as number, name: String(data.name).trim() };
+  }
 
   const name = society_name?.trim();
   if (!name) return { error: "Society is required for each drop." };
 
   const { data: existing, error: readError } = await supabase
     .from("societies")
-    .select("id")
+    .select("id, name")
     .eq("district_id", districtId)
     .ilike("name", name)
     .maybeSingle();
 
   if (readError) return { error: readError.message };
 
-  if (existing?.id) return { id: existing.id as number };
+  if (existing?.id) {
+    return { id: existing.id as number, name: String(existing.name).trim() };
+  }
 
   const { data: inserted, error: insertError } = await supabase
     .from("societies")
     .insert({ district_id: districtId, name })
-    .select("id")
+    .select("id, name")
     .single();
 
   if (insertError || !inserted) {
     if (/duplicate|unique/i.test(insertError?.message ?? "")) {
       const { data: retry } = await supabase
         .from("societies")
-        .select("id")
+        .select("id, name")
         .eq("district_id", districtId)
         .ilike("name", name)
         .maybeSingle();
-      if (retry?.id) return { id: retry.id as number };
+      if (retry?.id) {
+        return { id: retry.id as number, name: String(retry.name).trim() };
+      }
     }
     return { error: insertError?.message ?? "Could not save society to district masters." };
   }
 
-  return { id: inserted.id as number };
+  return { id: inserted.id as number, name: String(inserted.name).trim() };
 }
 
 export async function recordUnload(state: unknown, formData: FormData) {
@@ -193,15 +206,15 @@ export async function recordUnload(state: unknown, formData: FormData) {
   const societyKey = (drop: { society_id?: number | null; society_name?: string }) =>
     drop.society_id ? `id:${drop.society_id}` : `name:${drop.society_name?.trim().toLowerCase() ?? ""}`;
 
-  const societyIdByKey = new Map<string, number>();
+  const societyByKey = new Map<string, { id: number; name: string }>();
   for (const truck of payload.trucks) {
     for (const drop of truck.drops) {
       if (drop.quantity <= 0) continue;
       const key = societyKey(drop);
-      if (societyIdByKey.has(key)) continue;
+      if (societyByKey.has(key)) continue;
       const resolved = await resolveSocietyId(supabase, districtId, drop.society_id, drop.society_name);
       if ("error" in resolved) return { success: false, error: resolved.error };
-      societyIdByKey.set(key, resolved.id);
+      societyByKey.set(key, { id: resolved.id, name: resolved.name });
     }
   }
 
@@ -277,13 +290,17 @@ export async function recordUnload(state: unknown, formData: FormData) {
 
     const resolvedDrops = truck.drops
       .filter((drop) => drop.quantity > 0)
-      .map((drop) => ({
-        truck_id: truck.truck_id,
-        society_id: societyIdByKey.get(societyKey(drop))!,
-        supplier_id: drop.supplier_id,
-        fish_id: drop.fish_id,
-        quantity: drop.quantity,
-      }));
+      .map((drop) => {
+        const society = societyByKey.get(societyKey(drop))!;
+        return {
+          truck_id: truck.truck_id,
+          society_id: society.id,
+          society_name: society.name,
+          supplier_id: drop.supplier_id,
+          fish_id: drop.fish_id,
+          quantity: drop.quantity,
+        };
+      });
 
     if (resolvedDrops.length > 0) {
       const { error: dropsError } = await supabase.from("truck_unload_drops" as any).insert(resolvedDrops as any);

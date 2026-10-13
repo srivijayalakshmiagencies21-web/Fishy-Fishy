@@ -3,6 +3,7 @@ type OverviewTruckRow = {
   primary_truck_id?: string | null;
   location_name?: string | null;
   end_type?: string | null;
+  district_id?: number | null;
   district?: { name?: string | null } | null;
 };
 
@@ -92,6 +93,19 @@ export function overviewFinalDistrict(trucks: OverviewTruckRow[] | undefined | n
 
   const startPrimary = sorted.find((t) => !t.primary_truck_id) ?? sorted[0];
   return startPrimary?.district?.name?.trim() || "Unknown";
+}
+
+/** Destination district id at final stop (same truck selection as `overviewFinalDistrict`). */
+export function overviewFinalDistrictId(trucks: OverviewTruckRow[] | undefined | null): number | null {
+  const sorted = sortTrucks(trucks ?? []);
+  const directFinal = sorted.find((t) => !t.primary_truck_id && t.end_type === "FINAL_POINT");
+  if (directFinal?.district_id != null) return directFinal.district_id;
+
+  const anyFinal = sorted.find((t) => t.end_type === "FINAL_POINT");
+  if (anyFinal?.district_id != null) return anyFinal.district_id;
+
+  const startPrimary = sorted.find((t) => !t.primary_truck_id) ?? sorted[0];
+  return startPrimary?.district_id ?? null;
 }
 
 export type OverviewTruckCounts = {

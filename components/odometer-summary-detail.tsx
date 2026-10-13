@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { formatOdometerDisplayLabel, photoLabelFromStoragePath } from "@/lib/odometer-display";
+import { ModalOverlay } from "@/components/fixed-overlay";
 import { createClient } from "@/lib/supabase/client";
 
 const SIGNED_URL_TTL_SEC = 60 * 60;
@@ -124,8 +125,8 @@ export function OdometerSummaryDetail({
       </div>
 
       {modalOpen ? (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md transition-opacity duration-300"
+        <ModalOverlay
+          className="z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md transition-opacity duration-300"
           role="dialog"
           aria-modal="true"
           aria-label={`${label} capture`}
@@ -201,7 +202,7 @@ export function OdometerSummaryDetail({
               </div>
             ) : null}
           </div>
-        </div>
+        </ModalOverlay>
       ) : null}
     </>
   );

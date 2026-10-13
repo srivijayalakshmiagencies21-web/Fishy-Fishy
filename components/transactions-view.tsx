@@ -2,13 +2,21 @@
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { createTransaction, deleteTransaction, type FormState } from "@/app/(workspace)/finance/actions";
+import { BodyPortal, ModalOverlay } from "@/components/fixed-overlay";
 import { DateField } from "@/components/date-field";
 import { FinanceKpiCards } from "@/components/finance-kpi-cards";
 import { PartyField } from "@/components/party-field";
 import { SelectField } from "@/components/select-field";
-import { masterPartyNameSet, rememberCustomParty } from "@/lib/finance-party-memory";
+import { masterPartyNameSet, rememberCustomParty, rememberPcCustomParty } from "@/lib/finance-party-memory";
+import {
+  categoryPartyFieldConfig,
+  normalizeTransactionCategoryKey,
+  type CategoryPartyFieldConfig,
+  type PartyVendorRecord,
+} from "@/lib/finance-party-vendors";
 import type { CategoryMeta, FinanceKpiWallet } from "@/lib/finance-kpi";
 import type { FinanceKpiVariant } from "@/lib/finance-kpi";
+import type { FinancialYear } from "@/lib/financial-year";
 import type { NamedRow, TransactionCategoryRow } from "@/lib/masters";
 import {
   categoriesForType,
@@ -100,6 +108,7 @@ function TransactionEndpointField({
   partyVendors,
   partyDistricts,
   partySocieties,
+  categoryPartyConfig,
 }: {
   mode: TxnEndpointMode;
   side: "from" | "to";
@@ -113,6 +122,7 @@ function TransactionEndpointField({
   partyVendors: string[];
   partyDistricts: string[];
   partySocieties: string[];
+  categoryPartyConfig: CategoryPartyFieldConfig;
 }) {
   const name = side === "from" ? "from_value" : "to_value";
   if (mode === "party") {
@@ -123,9 +133,14 @@ function TransactionEndpointField({
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        vendors={partyVendors}
-        districts={partyDistricts}
-        societies={partySocieties}
+        vendors={categoryPartyConfig.vendors}
+        districts={categoryPartyConfig.districts}
+        societies={categoryPartyConfig.societies}
+        vendorsOnly={categoryPartyConfig.vendorsOnly}
+        districtsOnly={categoryPartyConfig.districtsOnly}
+        societiesOnly={categoryPartyConfig.societiesOnly}
+        partyRecentsScope={categoryPartyConfig.partyRecentsScope}
+        enforcePickList={categoryPartyConfig.enforceList}
         aria-label={side === "from" ? "From party" : "To party"}
       />
     );
@@ -179,11 +194,14 @@ export function TransactionsView({
   journeys,
   districts,
   partyVendors,
+  partyVendorRecords,
   partySocieties,
   categoryMetaByName,
   financeKpiVariant,
   financeKpiWallets,
   categoryScope,
+  financialYears,
+  districtIdsByFinancialYear,
   ledgerAccountLabelById = {},
   loadError,
 }: {
@@ -193,7 +211,10 @@ export function TransactionsView({
   categories: TransactionCategoryRow[];
   journeys: JourneyPickRow[];
   districts: NamedRow[];
+  financialYears: FinancialYear[];
+  districtIdsByFinancialYear: Record<number, number[]>;
   partyVendors: string[];
+  partyVendorRecords: PartyVendorRecord[];
   partySocieties: string[];
   categoryMetaByName: Record<string, CategoryMeta>;
   financeKpiVariant: FinanceKpiVariant;
@@ -733,18 +754,20 @@ export function TransactionsView({
       </section>
 
       {/* Floating Action Button (Freezed in bottom corner on mobile, above tabbar) */}
-      <button
-        type="button"
-        onClick={() => setFormOpen(true)}
-        className="finance-fab md:hidden flex h-11 w-11 items-center justify-center rounded-full bg-[var(--brand)] text-white shadow-xl hover:opacity-95 hover:scale-105 active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue/30 cursor-pointer"
-        aria-label="New transaction"
-        title="New transaction"
-      >
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
-      </button>
+      <BodyPortal>
+        <button
+          type="button"
+          onClick={() => setFormOpen(true)}
+          className="finance-fab md:hidden flex h-11 w-11 items-center justify-center rounded-full bg-[var(--brand)] text-white shadow-xl hover:opacity-95 hover:scale-105 active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue/30 cursor-pointer"
+          aria-label="New transaction"
+          title="New transaction"
+        >
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+        </button>
+      </BodyPortal>
 
       {filterSheetOpen ? (
         <MobileFilterSheet
@@ -778,7 +801,10 @@ export function TransactionsView({
           categoryScope={categoryScope}
           journeys={journeys}
           districts={districts}
+          financialYears={financialYears}
+          districtIdsByFinancialYear={districtIdsByFinancialYear}
           partyVendors={partyVendors}
+          partyVendorRecords={partyVendorRecords}
           partySocieties={partySocieties}
           onClose={() => setFormOpen(false)}
         />
@@ -846,8 +872,8 @@ function MobileFilterSheet({
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto"
+    <ModalOverlay
+      className="z-[70] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto"
       onClick={onClose}
       role="presentation"
     >
@@ -1072,7 +1098,7 @@ function MobileFilterSheet({
           </button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 
@@ -1082,7 +1108,10 @@ function NewTransactionModal({
   categories,
   journeys,
   districts,
+  financialYears,
+  districtIdsByFinancialYear,
   partyVendors,
+  partyVendorRecords,
   partySocieties,
   categoryScope,
   onClose,
@@ -1093,7 +1122,10 @@ function NewTransactionModal({
   categoryScope: "full" | "role";
   journeys: JourneyPickRow[];
   districts: NamedRow[];
+  financialYears: FinancialYear[];
+  districtIdsByFinancialYear: Record<number, number[]>;
   partyVendors: string[];
+  partyVendorRecords: PartyVendorRecord[];
   partySocieties: string[];
   onClose: () => void;
 }) {
@@ -1105,6 +1137,7 @@ function NewTransactionModal({
   const [fromValue, setFromValue] = useState("");
   const [toValue, setToValue] = useState("");
   const [categoryName, setCategoryName] = useState("");
+  const [financialYearId, setFinancialYearId] = useState("");
   const [districtId, setDistrictId] = useState("");
   const [journeyId, setJourneyId] = useState("");
   const wasPendingRef = useRef(false);
@@ -1122,6 +1155,7 @@ function NewTransactionModal({
     setCategoryName("");
     setFromValue("");
     setToValue("");
+    setFinancialYearId("");
     setDistrictId("");
     setJourneyId("");
   }, [allowedTypes, type]);
@@ -1139,23 +1173,79 @@ function NewTransactionModal({
     [categories, categoryName],
   );
 
+  const categoryPartyConfig = useMemo(
+    () =>
+      categoryPartyFieldConfig(
+        categoryName,
+        partyVendors,
+        partyDistrictLabels,
+        partySocieties,
+        partyVendorRecords,
+      ),
+    [categoryName, partyVendors, partyDistrictLabels, partySocieties, partyVendorRecords],
+  );
+
   const allocation = useMemo(() => {
     if (type === "transfer") {
-      return { showDistrict: false, showJourney: false, requireDistrict: false };
+      return {
+        showDistrict: false,
+        showJourney: false,
+        requireDistrict: false,
+        showFinancialYear: false,
+        requireFinancialYear: false,
+      };
     }
-    return transactionAllocationFields(selectedCategory);
+    return transactionAllocationFields(selectedCategory, type);
   }, [selectedCategory, type]);
+
+  const financialYearOptions = useMemo(
+    () => financialYears.map((year) => ({ value: String(year.id), label: year.label })),
+    [financialYears],
+  );
+
+  const districtsForPicker = useMemo(() => {
+    if (!allocation.showFinancialYear || !financialYearId) return districts;
+    const fyId = Number(financialYearId);
+    if (!Number.isFinite(fyId)) return districts;
+    const allowed = new Set(districtIdsByFinancialYear[fyId] ?? []);
+    if (allowed.size === 0) return districts;
+    return districts.filter((district) => allowed.has(district.id));
+  }, [allocation.showFinancialYear, districtIdsByFinancialYear, districts, financialYearId]);
 
   function handleCategoryChange(name: string) {
     setCategoryName(name);
     const cat = categories.find((row) => row.name === name);
-    const next = transactionAllocationFields(cat ?? null);
+    const next = transactionAllocationFields(cat ?? null, type);
+    if (!next.showFinancialYear) {
+      setFinancialYearId("");
+    }
     if (!next.showDistrict) {
       setDistrictId("");
       setJourneyId("");
     } else if (!next.showJourney) {
       setJourneyId("");
     }
+    if (fromMode === "party") setFromValue("");
+    if (toMode === "party") setToValue("");
+
+    const config = categoryPartyFieldConfig(
+      name,
+      partyVendors,
+      partyDistrictLabels,
+      partySocieties,
+      partyVendorRecords,
+    );
+    if (config.enforceList && config.vendorsOnly && config.vendors.length === 1) {
+      const only = config.vendors[0]!;
+      if (fromMode === "party") setFromValue(only);
+      if (toMode === "party") setToValue(only);
+    }
+  }
+
+  function handleFinancialYearChange(value: string) {
+    setFinancialYearId(value);
+    setDistrictId("");
+    setJourneyId("");
   }
 
   const accountsForPayment = useMemo(() => {
@@ -1197,7 +1287,14 @@ function NewTransactionModal({
   }
 
   function endpointPlaceholder(mode: TxnEndpointMode, side: "from" | "to") {
-    if (mode === "party") return "Type or pick from list";
+    if (mode === "party") {
+      if (categoryPartyConfig.districtsOnly) return "Pick a district";
+      if (categoryPartyConfig.societiesOnly) return "Type or pick a society";
+      if (categoryPartyConfig.enforceList && categoryPartyConfig.vendorsOnly) {
+        return categoryPartyConfig.vendors.length === 1 ? categoryPartyConfig.vendors[0]! : "Pick a vendor";
+      }
+      return "Type or pick from list";
+    }
     if (!paymentMode) return "Select payment first";
     const options = accountOptionsForSide(side);
     if (options.length === 0) {
@@ -1232,9 +1329,16 @@ function NewTransactionModal({
 
   useEffect(() => {
     if (wasPendingRef.current && !pending && state === null) {
-      const masterParties = masterPartyNameSet(partyVendors, partyDistrictLabels, partySocieties);
-      if (fromMode === "party") rememberCustomParty(fromValue, masterParties);
-      if (toMode === "party") rememberCustomParty(toValue, masterParties);
+      const isPcCategory = normalizeTransactionCategoryKey(categoryName) === "pc";
+      if (isPcCategory) {
+        const societyNames = new Set(partySocieties.map((name) => name.trim()).filter(Boolean));
+        if (fromMode === "party") rememberPcCustomParty(fromValue, societyNames);
+        if (toMode === "party") rememberPcCustomParty(toValue, societyNames);
+      } else {
+        const masterParties = masterPartyNameSet(partyVendors, partyDistrictLabels, partySocieties);
+        if (fromMode === "party") rememberCustomParty(fromValue, masterParties);
+        if (toMode === "party") rememberCustomParty(toValue, masterParties);
+      }
 
       setFormKey((key) => key + 1);
       setType(defaultTxnTypeForCategories(categories));
@@ -1242,6 +1346,7 @@ function NewTransactionModal({
       setFromValue("");
       setToValue("");
       setCategoryName("");
+      setFinancialYearId("");
       setDistrictId("");
       setJourneyId("");
       onClose();
@@ -1270,8 +1375,8 @@ function NewTransactionModal({
   }, [onClose]);
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto"
+    <ModalOverlay
+      className="z-[70] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto"
       onClick={onClose}
       role="presentation"
     >
@@ -1368,6 +1473,7 @@ function NewTransactionModal({
                     partyVendors={partyVendors}
                     partyDistricts={partyDistrictLabels}
                     partySocieties={partySocieties}
+                    categoryPartyConfig={categoryPartyConfig}
                   />
                 </FieldStack>
                 <FieldStack label={<AccountPartyLabel side="to" type={type} />}>
@@ -1384,6 +1490,7 @@ function NewTransactionModal({
                     partyVendors={partyVendors}
                     partyDistricts={partyDistrictLabels}
                     partySocieties={partySocieties}
+                    categoryPartyConfig={categoryPartyConfig}
                   />
                 </FieldStack>
               </div>
@@ -1409,6 +1516,23 @@ function NewTransactionModal({
                 </>
               ) : (
                 <>
+                  {allocation.showFinancialYear ? (
+                    <FieldStack label="Financial year" className="block space-y-1 sm:col-span-2">
+                      <SelectField
+                        name="financial_year_id"
+                        required={allocation.requireFinancialYear}
+                        searchable
+                        value={financialYearId}
+                        onChange={handleFinancialYearChange}
+                        placeholder={
+                          financialYears.length ? "Select financial year" : "Add FY in Vendor & Govt Rates"
+                        }
+                        options={financialYearOptions}
+                      />
+                    </FieldStack>
+                  ) : (
+                    <input type="hidden" name="financial_year_id" value="" />
+                  )}
                   {allocation.showDistrict ? (
                     <FieldStack label="District" className="block space-y-1 sm:col-span-2">
                       <SelectField
@@ -1417,8 +1541,15 @@ function NewTransactionModal({
                         searchable
                         value={districtId}
                         onChange={handleDistrictChange}
-                        placeholder={districts.length ? "Select district" : "Add districts in Masters"}
-                        options={districts.map((d) => ({ value: String(d.id), label: d.label }))}
+                        disabled={allocation.showFinancialYear && !financialYearId}
+                        placeholder={
+                          allocation.showFinancialYear && !financialYearId
+                            ? "Select financial year first"
+                            : districtsForPicker.length
+                              ? "Select district"
+                              : "Add districts in Masters"
+                        }
+                        options={districtsForPicker.map((d) => ({ value: String(d.id), label: d.label }))}
                       />
                     </FieldStack>
                   ) : (
@@ -1468,7 +1599,7 @@ function NewTransactionModal({
           </div>
         </form>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 

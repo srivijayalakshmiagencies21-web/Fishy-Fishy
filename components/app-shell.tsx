@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, startTransition } from "react";
+import { useEffect, useRef, useState, startTransition } from "react";
 import { flushSync } from "react-dom";
 import { prefetchMasters } from "@/components/master-cache";
 import { useNavIntent } from "@/components/nav-intent";
+import { PageHeaderAsideProvider, PageHeaderAsideSlot } from "@/components/page-header-aside";
 import { appPages } from "@/lib/access";
 import { masterLinks } from "@/lib/master-links";
 import { createClient } from "@/lib/supabase/client";
@@ -31,6 +32,7 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
   const { adminTab, previewMaster, armAdmin, armMaster } = useNavIntent();
   const [collapsed, setCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(() => new Date());
   const [pendingNav, setPendingNav] = useState<{ href: string; from: string } | null>(null);
   const pendingHref = pendingNav && pendingNav.from === pathname ? pendingNav.href : null;
@@ -45,12 +47,13 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
     .filter((item) => pages.includes(item.key) || (item.key === "users" && role === "Manager"))
     .map((item) => {
       let shortLabel: string = item.label;
+      if (item.key === "overview") shortLabel = "Overview";
       if (item.key === "finance-manager") shortLabel = "Fin Mgr";
       if (item.key === "finance-executive") shortLabel = "Fin Exe";
       if (item.key === "start") shortLabel = "Start";
       if (item.key === "transfer") shortLabel = "Transfer";
       if (item.key === "final") shortLabel = "Final";
-      if (item.key === "journey-rates") shortLabel = "Rates";
+      if (item.key === "vendor-govt-rates") shortLabel = "V&G Rates";
       if (item.key === "users") shortLabel = "Users";
       if (item.key === "masters") shortLabel = "Masters";
       return { 
@@ -65,6 +68,31 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
   useEffect(() => {
     document.documentElement.style.setProperty("--sidebar-width", collapsed ? "5.25rem" : "16rem");
   }, [collapsed]);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onPointerDown(event: MouseEvent | TouchEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (accountMenuRef.current?.contains(target)) return;
+      setMenuOpen(false);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown, { passive: true });
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [menuOpen]);
 
   useEffect(() => {
     function prefetchNav() {
@@ -164,12 +192,19 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
             <span suppressHydrationWarning>{timeStr}</span>
           </div>
           <div className="header-side header-side--right">
-            <div className="relative">
-              <button type="button" className="header-avatar" aria-label="Account menu" onClick={() => setMenuOpen((open) => !open)}>
+            <div className="relative" ref={accountMenuRef}>
+              <button
+                type="button"
+                className="header-avatar"
+                aria-label="Account menu"
+                aria-expanded={menuOpen}
+                aria-haspopup="menu"
+                onClick={() => setMenuOpen((open) => !open)}
+              >
                 {initial}
               </button>
               {menuOpen ? (
-                <div className="account-menu">
+                <div className="account-menu" role="menu">
                   <div className="border-b border-[var(--border)] px-3 py-2.5">
                     <p className="text-xs font-semibold tracking-wide text-[var(--text-muted)] uppercase">Account</p>
                     <p className="mt-1 truncate text-sm font-medium">{email}</p>
@@ -239,16 +274,22 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
       <div className="app-shell">
         <main className="app-main">
           <div className="content-canvas">
+            <PageHeaderAsideProvider>
+            <div className="canvas-stack">
+            <div className="canvas-body">{children}</div>
             <div className="canvas-page-header">
-              <h1 className="page-title">
-                {onUsers
-                  ? (pages.includes("users") ? "Users & Roles" : "Users")
-                  : pathname.startsWith("/account")
-                    ? "Account"
-                    : onMasters
-                      ? (shownMaster?.label ?? "Masters")
-                      : (currentPage?.label ?? "Fishy-Fishy")}
-              </h1>
+              <div className="page-header-row">
+                <h1 className="page-title">
+                  {onUsers
+                    ? (pages.includes("users") ? "Users & Roles" : "Users")
+                    : pathname.startsWith("/account")
+                      ? "Account"
+                      : onMasters
+                        ? (shownMaster?.label ?? "Masters")
+                        : (currentPage?.label ?? "Fishy-Fishy")}
+                </h1>
+                <PageHeaderAsideSlot />
+              </div>
               {onMasters ? (
                 <div className="segmented-control mt-4" role="tablist" aria-label="Masters">
                   {masterLinks.map((link) => {
@@ -298,7 +339,8 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
                 </div>
               ) : null}
             </div>
-            <div className="canvas-body">{children}</div>
+            </div>
+            </PageHeaderAsideProvider>
           </div>
         </main>
       </div>
@@ -346,8 +388,9 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
 }
 
 function NavIcon({ name }: { name: string }) {
+  if (name === "overview") return <OverviewIcon />;
   if (name === "timeline") return <TimelineIcon />;
-  if (name === "journey-rates") return <JourneyRatesIcon />;
+  if (name === "vendor-govt-rates") return <JourneyRatesIcon />;
   if (name === "finance-manager") return <FinanceRoleRupeeIcon letter="M" />;
   if (name === "finance-executive") return <FinanceRoleRupeeIcon letter="E" />;
   if (name === "masters") return <MastersIcon />;
@@ -363,6 +406,17 @@ function JourneyRatesIcon() {
       <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
       <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
       <path d="M8 7h8M8 11h8M8 15h5" />
+    </svg>
+  );
+}
+
+function OverviewIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
     </svg>
   );
 }

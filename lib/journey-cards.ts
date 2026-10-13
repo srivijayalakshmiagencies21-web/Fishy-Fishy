@@ -22,6 +22,7 @@ const JOURNEY_CARD_TRUCK_FIELDS = `
      ),
      unload_drops:truck_unload_drops(
         society_id,
+        society_name,
         supplier_id,
         fish_id,
         quantity,

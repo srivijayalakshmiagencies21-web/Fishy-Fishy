@@ -48,6 +48,7 @@ import { NumericFieldInput, QuantityInput } from "@/components/quantity-input";
 import { SelectField } from "@/components/select-field";
 import { isValidMobile, mobileDigits, MOBILE_DIGITS } from "@/lib/phone";
 import { scrollCanvasToTop } from "@/lib/scroll-canvas";
+import { FixedOverlay, ModalOverlay } from "@/components/fixed-overlay";
 import { FloatingAddButton } from "@/components/floating-add-button";
 import {
   truckEndTypeBadgeClass,
@@ -283,8 +284,8 @@ function FormErrorModal({ message, onDismiss }: { message: string; onDismiss: ()
   }, [onDismiss]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+    <ModalOverlay
+      className="z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="transfer-form-error-title"
@@ -308,7 +309,7 @@ function FormErrorModal({ message, onDismiss }: { message: string; onDismiss: ()
           </button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 
@@ -1833,7 +1834,7 @@ export function TransferPointForm({
               </button>
               {openDropdownId === journey.id ? (
                 <>
-                  <div className="fixed inset-0 z-10" onClick={() => setOpenDropdownId(null)} />
+                  <FixedOverlay className="z-10" onClick={() => setOpenDropdownId(null)} aria-hidden />
                   <div className="absolute right-0 z-20 mt-1 w-36 overflow-hidden rounded-lg border border-gray-100 bg-white py-1 shadow-lg">
                     <button
                       type="button"
@@ -1915,7 +1916,7 @@ export function TransferPointForm({
       </JourneyPointLaneSection>
 
       {deleteTransferJourneyId ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+        <ModalOverlay className="z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-2xl border border-gray-100 bg-white p-6 shadow-2xl">
             <h3 className="mb-2 text-xl font-bold text-gray-900">Delete transfer information?</h3>
             <p className="mb-6 text-sm leading-relaxed text-gray-500">
@@ -1941,7 +1942,7 @@ export function TransferPointForm({
               </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       ) : null}
     </div>
   );

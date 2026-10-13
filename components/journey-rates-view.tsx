@@ -1,17 +1,23 @@
 "use client";
 
 import { useRef, useState, useTransition, type ReactNode } from "react";
-import { saveJourneyRateLine } from "@/app/(workspace)/journey-rates/actions";
+import { saveJourneyRateLine } from "@/app/(workspace)/vendor-govt-rates/actions";
 import {
   computeLineAmount,
   journeyRateStorageKey,
   parseChargeAmount,
   supplierAdditionalChargeKey,
   transporterAdditionalChargeKey,
+  totalSupplierQuantity,
   type JourneyRateRecord,
   type JourneyRateSupplierLine,
   type JourneyRateTransporterLine,
+  type VendorGovtRatesView,
 } from "@/lib/journey-rates";
+import { GovtRatesLedger } from "@/components/govt-rates-ledger";
+import type { FinancialYear } from "@/lib/financial-year";
+import type { GovtRateLedgerRow } from "@/lib/govt-rates.server";
+import type { DistrictRow } from "@/lib/masters";
 import { formatAmount } from "@/lib/transactions";
 
 const rateInputClass =
@@ -32,6 +38,33 @@ function groupByLabel<T>(items: T[], label: (item: T) => string) {
       title: label(rows[0]!).trim() || "Unknown",
       rows,
     }));
+}
+
+function formatClosureDate(dateString: string | null | undefined): string | null {
+  if (!dateString) return null;
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
+  });
+}
+
+function formatClosureDateTime(dateString: string | null | undefined): string | null {
+  if (!dateString) return null;
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kolkata",
+  });
 }
 
 function SavedRateInput({
@@ -131,6 +164,50 @@ function transporterGroupTotal(
     const key = journeyRateStorageKey(journeyId, line.lineKey);
     return sum + (computeLineAmount(line.kilometers, ratesByLine[key] ?? "") ?? 0);
   }, 0);
+}
+
+function totalTransporterKilometers(lines: JourneyRateTransporterLine[]) {
+  let sum = 0;
+  let hasReading = false;
+  for (const line of lines) {
+    if (line.kilometers == null) continue;
+    hasReading = true;
+    sum += Number(line.kilometers) || 0;
+  }
+  return { sum, hasReading };
+}
+
+function VendorGovtRatesToggle({
+  value,
+  onChange,
+}: {
+  value: VendorGovtRatesView;
+  onChange: (value: VendorGovtRatesView) => void;
+}) {
+  return (
+    <div className="segmented-control w-full sm:w-auto" role="tablist" aria-label="Vendor and government rates">
+      {(
+        [
+          { id: "vendors" as const, label: "Vendors" },
+          { id: "govt" as const, label: "Govt" },
+        ] as const
+      ).map((mode) => {
+        const selected = value === mode.id;
+        return (
+          <button
+            key={mode.id}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            onClick={() => onChange(mode.id)}
+            className={`segmented-btn flex-1 sm:flex-none ${selected ? "active" : ""}`}
+          >
+            {mode.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 function AdditionalChargeInput({
@@ -400,12 +477,14 @@ function JourneyRateCard({
   onRateChange,
   isExpanded,
   onToggle,
+  ratesView,
 }: {
   record: JourneyRateRecord;
   ratesByLine: Record<string, string>;
   onRateChange: (storageKey: string, value: string) => void;
   isExpanded: boolean;
   onToggle: () => void;
+  ratesView: VendorGovtRatesView;
 }) {
   const supplierGroups = groupByLabel(record.suppliers, (line) => line.supplier);
   const nonLocalGroups = groupByLabel(record.nonLocalTransporters, (line) => line.transporter);
@@ -440,6 +519,15 @@ function JourneyRateCard({
   const transporterTotal = nonLocalTotal + localTotal;
   const journeyTotal = supplierTotal + transporterTotal;
 
+  const supplierQuantityTotal = totalSupplierQuantity(record.suppliers);
+  const transporterKm = totalTransporterKilometers([
+    ...record.localTransporters,
+    ...record.nonLocalTransporters,
+  ]);
+
+  const closureDateText = formatClosureDate(record.closedAt);
+  const closureFullText = formatClosureDateTime(record.closedAt);
+
   const lineRates: RateLineBindings = {
     rateTextFor: (journeyId, lineKey) => ratesByLine[journeyRateStorageKey(journeyId, lineKey)] ?? "",
     onRateTextChange: (journeyId, lineKey, value) =>
@@ -447,48 +535,57 @@ function JourneyRateCard({
   };
 
   return (
-    <article className="surface overflow-hidden rounded-2xl border border-line transition-all duration-200">
+    <article className="surface rounded-2xl border border-line transition-all duration-200">
       <header
-        className={`bg-[var(--page)] transition-colors hover:bg-slate-100/70 ${
-          isExpanded ? "border-b border-line" : ""
+        className={`relative bg-[var(--page)] transition-colors hover:bg-slate-100/70 ${
+          isExpanded ? "border-b border-line rounded-t-2xl" : "rounded-2xl"
         }`}
       >
         <button
           type="button"
           onClick={onToggle}
           aria-expanded={isExpanded}
-          className="flex w-full flex-col gap-2 p-3 sm:p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue cursor-pointer"
+          className="group flex w-full flex-col gap-2 p-3 pb-4 sm:p-4 sm:pb-4.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue cursor-pointer"
         >
-          {/* Top Line: Title + Amount on Left, Arrow Mark on Right */}
-          <div className="flex w-full items-center justify-between gap-3">
-            <div className="flex items-center gap-2 min-w-0">
+          {/* Title + date; grand total on its own row on mobile */}
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <h2 className="text-base font-bold text-blue-dark">
                 Journey #{record.journeyNumber}
+                <span className="font-semibold text-slate-600"> · {record.district}</span>
               </h2>
 
-              <span className="inline-flex items-center rounded-lg bg-blue-soft border border-blue/25 px-2.5 py-0.5 text-xs font-extrabold text-blue-dark tabular-nums shrink-0">
+              {closureDateText ? (
+                <span
+                  title={closureFullText ? `Closed on ${closureFullText}` : undefined}
+                  suppressHydrationWarning
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-xs font-bold text-emerald-800 tabular-nums"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className="h-3 w-3 shrink-0 text-emerald-700"
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="4" width="18" height="18" rx="2" />
+                    <path d="M16 2v4M8 2v4M3 10h18" />
+                  </svg>
+                  <span>{closureDateText}</span>
+                </span>
+              ) : null}
+            </div>
+
+            {ratesView === "vendors" ? (
+              <span className="inline-flex w-fit items-center rounded-lg bg-blue-soft border border-blue/25 px-2.5 py-0.5 text-xs font-extrabold text-blue-dark tabular-nums shrink-0">
                 {formatAmount(journeyTotal)}
               </span>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs font-semibold text-muted hidden sm:inline">
-                {isExpanded ? "Collapse" : "Expand"}
-              </span>
-              <div
-                className={`flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-white text-blue-dark transition-transform duration-200 shadow-2xs ${
-                  isExpanded ? "rotate-180 bg-blue-soft text-blue" : ""
-                }`}
-              >
-                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
-                  <path d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </div>
+            ) : null}
           </div>
 
-          {/* Second Line: Supplier and Transporter Badges Side by Side (No wrapping) */}
-          {supplierGroups.length > 0 || transporterCount > 0 ? (
+          {/* Second Line: category badges */}
+          {ratesView === "vendors" && (supplierGroups.length > 0 || transporterCount > 0) ? (
             <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar max-w-full">
               {supplierGroups.length > 0 ? (
                 <span className="inline-flex shrink-0 whitespace-nowrap items-center gap-1 rounded-md bg-rose-50 border border-rose-200 px-1.5 sm:px-2 py-0.5 text-[10.5px] sm:text-xs font-semibold text-rose-800">
@@ -496,7 +593,7 @@ function JourneyRateCard({
                     {supplierGroups.length} {supplierGroups.length === 1 ? "Supplier" : "Suppliers"}
                   </span>
                   <span className="font-bold text-rose-950 tabular-nums">
-                    · {formatAmount(supplierTotal)}
+                    · {supplierQuantityTotal.toLocaleString("en-IN")} qty
                   </span>
                 </span>
               ) : null}
@@ -507,20 +604,38 @@ function JourneyRateCard({
                     {transporterCount} {transporterCount === 1 ? "Transporter" : "Transporters"}
                   </span>
                   <span className="font-bold text-amber-950 tabular-nums">
-                    · {formatAmount(transporterTotal)}
+                    ·{" "}
+                    {transporterKm.hasReading
+                      ? `${transporterKm.sum.toLocaleString("en-IN")} km`
+                      : "—"}
                   </span>
                 </span>
               ) : null}
             </div>
           ) : null}
+
+          {/* Arrow Floating on the Bottom Line in Centre */}
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 z-10 pointer-events-none">
+            <div
+              className={`flex h-6 w-6 items-center justify-center rounded-full border border-line bg-white text-blue-dark transition-all duration-200 shadow-2xs group-hover:border-blue/50 group-hover:shadow-xs ${
+                isExpanded ? "rotate-180 bg-blue-soft text-blue" : ""
+              }`}
+            >
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+                <path d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
         </button>
       </header>
 
       {isExpanded ? (
-        <div className="space-y-6 p-4">
+        <div className="space-y-6 p-4 pt-5 sm:pt-6">
+        {ratesView === "govt" ? null : (
+        <>
         <section className="space-y-3">
-          <h3 className="text-center text-xs font-bold uppercase tracking-wider text-blue-dark sm:text-left">
-            Supplier details (start point)
+          <h3 className="text-center text-xs font-bold tracking-wider text-blue-dark sm:text-left">
+            SUPPLIER
           </h3>
           {supplierGroups.length === 0 ? (
             <p className="text-sm text-muted">No start-point quantities recorded.</p>
@@ -689,6 +804,8 @@ function JourneyRateCard({
           lineRates={lineRates}
           empty="No local transporters on this journey."
         />
+        </>
+        )}
       </div>
       ) : null}
     </article>
@@ -853,14 +970,23 @@ export function JourneyRatesView({
   rows,
   initialRateTexts,
   error,
+  financialYears,
+  districts,
+  govtLedgerRows,
+  canEditGovtSetup,
 }: {
   rows: JourneyRateRecord[];
   initialRateTexts: Record<string, string>;
   error: string | null;
+  financialYears: FinancialYear[];
+  districts: DistrictRow[];
+  govtLedgerRows: GovtRateLedgerRow[];
+  canEditGovtSetup: boolean;
 }) {
   const [ratesByLine, setRatesByLine] = useState(initialRateTexts);
   const [syncedInitial, setSyncedInitial] = useState(initialRateTexts);
   const [expandedJourneyIds, setExpandedJourneyIds] = useState<Record<string, boolean>>({});
+  const [ratesView, setRatesView] = useState<VendorGovtRatesView>("vendors");
 
   if (syncedInitial !== initialRateTexts) {
     setSyncedInitial(initialRateTexts);
@@ -890,49 +1016,62 @@ export function JourneyRatesView({
     }
   }
 
-  if (error) {
-    return (
-      <p className="rounded-xl border border-line bg-blue-soft px-4 py-3 text-sm font-medium text-blue-dark">
-        {error}
-      </p>
-    );
-  }
-
-  if (rows.length === 0) {
-    return (
-      <p className="rounded-xl border border-line bg-blue-soft px-4 py-3 text-sm text-muted">
-        No closed journeys yet. Rates appear here after a journey is completed at Final Point.
-      </p>
-    );
-  }
+  const showVendorJourneys = ratesView === "vendors";
 
   return (
-    <div className="space-y-3">
-      {rows.length > 1 ? (
-        <div className="flex items-center justify-between gap-3 px-1">
-          <p className="text-xs font-semibold text-muted">
-            {rows.length} completed journeys
-          </p>
-          <button
-            type="button"
-            onClick={toggleAll}
-            className="text-xs font-bold text-blue hover:text-blue-dark transition-colors cursor-pointer"
-          >
-            {allExpanded ? "Collapse all" : "Expand all"}
-          </button>
-        </div>
+    <div className="space-y-6 pb-6">
+      <div className="flex flex-col gap-3 px-1 sm:flex-row sm:items-center sm:justify-between">
+        <VendorGovtRatesToggle value={ratesView} onChange={setRatesView} />
+        {showVendorJourneys && rows.length > 1 ? (
+          <div className="flex items-center justify-between gap-3 sm:justify-end">
+            <p className="text-xs font-semibold text-muted sm:order-first">
+              {rows.length} completed journeys
+            </p>
+            <button
+              type="button"
+              onClick={toggleAll}
+              className="text-xs font-bold text-blue hover:text-blue-dark transition-colors cursor-pointer"
+            >
+              {allExpanded ? "Collapse all" : "Expand all"}
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      {ratesView === "govt" ? (
+        <GovtRatesLedger
+          rows={govtLedgerRows}
+          financialYears={financialYears}
+          districts={districts}
+          canEdit={canEditGovtSetup}
+        />
       ) : null}
 
-      {rows.map((record) => (
-        <JourneyRateCard
-          key={record.journeyId}
-          record={record}
-          ratesByLine={ratesByLine}
-          onRateChange={setLineRate}
-          isExpanded={Boolean(expandedJourneyIds[record.journeyId])}
-          onToggle={() => toggleJourney(record.journeyId)}
-        />
-      ))}
+      {showVendorJourneys && error ? (
+        <p className="rounded-xl border border-line bg-blue-soft px-4 py-3 text-sm font-medium text-blue-dark">
+          {error}
+        </p>
+      ) : null}
+
+      {showVendorJourneys && !error && rows.length === 0 ? (
+        <p className="rounded-xl border border-line bg-blue-soft px-4 py-3 text-sm text-muted">
+          No closed journeys yet. Rates appear here after a journey is completed at Final Point.
+        </p>
+      ) : null}
+
+      {showVendorJourneys && !error
+        ? rows.map((record) => (
+            <JourneyRateCard
+              key={record.journeyId}
+              record={record}
+              ratesByLine={ratesByLine}
+              onRateChange={setLineRate}
+              isExpanded={Boolean(expandedJourneyIds[record.journeyId])}
+              onToggle={() => toggleJourney(record.journeyId)}
+              ratesView={ratesView}
+            />
+          ))
+        : null}
     </div>
   );
 }

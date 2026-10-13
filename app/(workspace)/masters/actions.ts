@@ -443,6 +443,8 @@ export async function tagCompany(_state: FormState, formData: FormData): Promise
 }
 
 async function removeRow(
+  _state: FormState,
+  formData: FormData,
   table:
     | "accounts"
     | "payment_modes"
@@ -451,61 +453,79 @@ async function removeRow(
     | "fishes"
     | "districts"
     | "societies",
-  id: number,
   path: string,
-) {
-  const supabase = await createClient();
-  const { error } = await supabase.from(table).delete().eq("id", id);
-  if (error) {
-    redirect(`${path}?error=${encodeURIComponent(readableError(error.message))}`);
+): Promise<FormState> {
+  const id = Number(formData.get("id"));
+  if (!Number.isFinite(id) || id <= 0) {
+    return fail("Choose a valid row to remove.");
   }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.from(table).delete().eq("id", id).select("id");
+  if (error) {
+    return fail(readableError(error.message));
+  }
+  if (!data?.length) {
+    return fail("Nothing was removed. You may not have permission, or this row is still in use elsewhere.");
+  }
+
   revalidatePath(path);
   const slug = path.split("/").filter(Boolean).pop();
   if (slug) invalidateMasterCache(slug);
+  return null;
 }
 
-export async function deleteAccount(formData: FormData) {
-  await removeRow("accounts", Number(formData.get("id")), "/masters/accounts");
+export async function deleteAccount(state: FormState, formData: FormData) {
+  return removeRow(state, formData, "accounts", "/masters/accounts");
 }
 
-export async function deletePaymentMode(formData: FormData) {
-  await removeRow("payment_modes", Number(formData.get("id")), "/masters/payment-modes");
+export async function deletePaymentMode(state: FormState, formData: FormData) {
+  return removeRow(state, formData, "payment_modes", "/masters/payment-modes");
 }
 
-export async function deleteTransactionCategory(formData: FormData) {
-  await removeRow("transaction_categories", Number(formData.get("id")), "/masters/transactions");
+export async function deleteTransactionCategory(state: FormState, formData: FormData) {
+  return removeRow(state, formData, "transaction_categories", "/masters/transactions");
 }
 
-export async function deleteVendor(formData: FormData) {
-  await removeRow("vendors", Number(formData.get("id")), "/masters/vendors");
+export async function deleteVendor(state: FormState, formData: FormData) {
+  return removeRow(state, formData, "vendors", "/masters/vendors");
 }
 
-export async function deleteFish(formData: FormData) {
-  await removeRow("fishes", Number(formData.get("id")), "/masters/fishes");
+export async function deleteFish(state: FormState, formData: FormData) {
+  return removeRow(state, formData, "fishes", "/masters/fishes");
 }
 
-export async function deleteDistrict(formData: FormData) {
-  await removeRow("districts", Number(formData.get("id")), "/masters/districts");
+export async function deleteDistrict(state: FormState, formData: FormData) {
+  return removeRow(state, formData, "districts", "/masters/districts");
 }
 
-export async function deleteSociety(formData: FormData) {
-  await removeRow("societies", Number(formData.get("id")), "/masters/districts");
+export async function deleteSociety(state: FormState, formData: FormData) {
+  return removeRow(state, formData, "societies", "/masters/districts");
 }
 
-export async function unlinkCompany(formData: FormData) {
+export async function unlinkCompany(_state: FormState, formData: FormData): Promise<FormState> {
   const districtId = Number(formData.get("district_id"));
   const companyId = Number(formData.get("company_id"));
+  if (!Number.isFinite(districtId) || districtId <= 0 || !Number.isFinite(companyId) || companyId <= 0) {
+    return fail("Choose a valid company to unlink.");
+  }
+
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("district_companies")
     .delete()
     .eq("district_id", districtId)
-    .eq("company_id", companyId);
+    .eq("company_id", companyId)
+    .select("district_id");
 
   if (error) {
-    redirect(`/masters/districts?error=${encodeURIComponent(readableError(error.message))}`);
+    return fail(readableError(error.message));
+  }
+  if (!data?.length) {
+    return fail("That company link could not be removed.");
   }
 
   revalidatePath("/masters/districts");
   invalidateMasterCache("districts");
+  return null;
 }

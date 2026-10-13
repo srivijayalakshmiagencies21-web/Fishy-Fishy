@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 import { accountEmail } from "@/lib/account-email";
-import { appPages, pageLabel } from "@/lib/access";
+import { appPages, normalizeUserPages, pageLabel } from "@/lib/access";
 import type { DirectoryRole, DirectoryUser } from "@/lib/directory";
 import { createClient } from "@/lib/supabase/client";
 import { useNavIntent } from "@/components/nav-intent";
@@ -224,7 +224,7 @@ export function UserManagement({
     if (role) {
       setEditingRoleId(role.id);
       setRoleName(role.name);
-      setRolePages(role.allowed_pages);
+      setRolePages(normalizeUserPages(role.allowed_pages));
     } else {
       setEditingRoleId(null);
       setRoleName("");
@@ -756,7 +756,7 @@ export function UserManagement({
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {role.allowed_pages.length > 0 ? (
-                    role.allowed_pages.map((page) => (
+                    normalizeUserPages(role.allowed_pages).map((page) => (
                       <span key={page} className="rounded-full bg-[var(--brand-soft)] px-2.5 py-1 text-xs font-semibold text-[var(--brand-dark)]">
                         {pageLabel(page)}
                       </span>

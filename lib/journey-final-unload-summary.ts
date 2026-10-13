@@ -26,3 +26,11 @@ export function truckSummaryQuantity(truck: Record<string, unknown>, mode: "item
   }
   return ((truck.items as any[]) ?? []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
 }
+
+/** Total quantity recorded at final point (society unload drops on FINAL_POINT trucks). */
+export function journeyFinalPointTotalQty(journey: JourneySummary): number {
+  return trucksForFinalUnload(journey.trucks).reduce(
+    (sum, truck) => sum + truckSummaryQuantity(truck, "unload_drops"),
+    0,
+  );
+}

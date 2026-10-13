@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { readCustomParties } from "@/lib/finance-party-memory";
+import { readCustomParties, readPcCustomParties } from "@/lib/finance-party-memory";
 
 type PartySuggestionGroup = {
   id: string;
@@ -44,6 +44,12 @@ export function PartyField({
   vendors,
   districts,
   societies,
+  vendorsOnly = false,
+  districtsOnly = false,
+  societiesOnly = false,
+  partyRecentsScope = "global",
+  enforceVendorList = false,
+  enforcePickList = false,
   "aria-label": ariaLabel,
 }: {
   name: string;
@@ -54,6 +60,17 @@ export function PartyField({
   vendors: string[];
   districts: string[];
   societies: string[];
+  /** Hide district, society, and recent suggestions — vendor list only. */
+  vendorsOnly?: boolean;
+  /** Hide vendor, society, and recent suggestions — district list only. */
+  districtsOnly?: boolean;
+  /** Society suggestions (+ PC recents when `partyRecentsScope` is pc); typing still allowed. */
+  societiesOnly?: boolean;
+  partyRecentsScope?: "global" | "pc";
+  /** Party must match a vendor name in `vendors` (case-insensitive). */
+  enforceVendorList?: boolean;
+  /** Party must match vendors or districts per `vendorsOnly` / `districtsOnly`. */
+  enforcePickList?: boolean;
   "aria-label"?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -75,16 +92,42 @@ export function PartyField({
   const societyNames = useMemo(() => uniqueSorted(societies), [societies]);
 
   const groups = useMemo((): PartySuggestionGroup[] => {
+    const q = open ? menuFilter : "";
+    if (districtsOnly) {
+      return [{ id: "district", label: "District", names: filterNames(districtNames, q) }];
+    }
+    if (societiesOnly) {
+      const master = new Set(societyNames);
+      const recents =
+        partyRecentsScope === "pc" ? readPcCustomParties() : readCustomParties();
+      const recent = recents.filter((name) => !master.has(name));
+      return [
+        { id: "society", label: "Society", names: filterNames(societyNames, q) },
+        { id: "recent", label: "Recent", names: filterNames(recent, q) },
+      ];
+    }
+    if (vendorsOnly) {
+      return [{ id: "vendor", label: "Vendor", names: filterNames(vendorNames, q) }];
+    }
     const master = new Set([...vendorNames, ...districtNames, ...societyNames]);
     const recent = readCustomParties().filter((name) => !master.has(name));
-    const q = open ? menuFilter : "";
     return [
       { id: "vendor", label: "Vendor", names: filterNames(vendorNames, q) },
       { id: "district", label: "District", names: filterNames(districtNames, q) },
       { id: "society", label: "Society", names: filterNames(societyNames, q) },
       { id: "recent", label: "Recent", names: filterNames(recent, q) },
     ];
-  }, [vendorNames, districtNames, societyNames, menuFilter, open]);
+  }, [
+    vendorNames,
+    districtNames,
+    societyNames,
+    menuFilter,
+    open,
+    vendorsOnly,
+    districtsOnly,
+    societiesOnly,
+    partyRecentsScope,
+  ]);
 
   const hasVisibleOptions = groups.some((group) => group.names.length > 0);
 
@@ -135,6 +178,24 @@ export function PartyField({
     closeMenu();
     inputRef.current?.focus();
   }
+
+  const mustEnforcePick = enforcePickList || enforceVendorList;
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el || !mustEnforcePick) return;
+    const q = value.trim().toLowerCase();
+    if (!q) {
+      el.setCustomValidity("");
+      return;
+    }
+    const allowed = districtsOnly ? districtNames : vendorNames;
+    const ok = allowed.some((name) => name.toLowerCase() === q);
+    const message = districtsOnly
+      ? "Pick a district from the list for this category."
+      : "Pick a vendor from the list for this category.";
+    el.setCustomValidity(ok ? "" : message);
+  }, [value, mustEnforcePick, districtsOnly, vendorNames, districtNames]);
 
   useEffect(() => {
     if (!open) return;
@@ -225,7 +286,19 @@ export function PartyField({
               <ul className="py-1" id={listId} role="listbox">
                 {!hasVisibleOptions ? (
                   <li className="select-field-empty px-3 py-2 text-sm text-muted">
-                    {menuFilter.trim() ? "No matches — use what you typed" : "Type a party name or pick a suggestion"}
+                    {menuFilter.trim()
+                      ? vendorsOnly || districtsOnly
+                        ? districtsOnly
+                          ? "No matching districts"
+                          : "No matching vendors"
+                        : "No matches — use what you typed"
+                      : districtsOnly
+                        ? "Pick a district from the list"
+                        : societiesOnly
+                          ? "Type or pick a society"
+                          : vendorsOnly
+                            ? "Pick a vendor from the list"
+                            : "Type a party name or pick a suggestion"}
                   </li>
                 ) : (
                   groups.map((group) =>

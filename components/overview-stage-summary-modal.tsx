@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ModalOverlay } from "@/components/fixed-overlay";
 import { JourneySummaryCard } from "@/components/journey-summary-card";
 import type { OverviewStage } from "@/lib/overview-stage-summary";
 import { overviewStageSummaryConfig } from "@/lib/overview-stage-summary";
@@ -43,7 +44,7 @@ export function OverviewStageSummaryModal({
   const config = overviewStageSummaryConfig(journey, open.stage);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-[6vh] sm:pt-[8vh]">
+    <ModalOverlay className="z-50 flex items-start justify-center p-4 pt-[6vh] sm:pt-[8vh]">
       <button
         type="button"
         className="absolute inset-0 bg-black/45 backdrop-blur-[1px]"
@@ -89,6 +90,6 @@ export function OverviewStageSummaryModal({
           />
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

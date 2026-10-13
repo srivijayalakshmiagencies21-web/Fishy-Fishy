@@ -1,10 +1,15 @@
 import type { JourneySummary } from "@/lib/journey-cards";
+import { journeyFinalPointTotalQty } from "@/lib/journey-final-unload-summary";
 import {
   formatDistanceLegs,
   legsFromTruckRow,
   totalDistanceKmFromLegs,
 } from "@/lib/journey-odometer-legs";
-import { overviewSkipsTransfer } from "@/lib/overview-journey-meta";
+import {
+  overviewFinalDistrict,
+  overviewFinalDistrictId,
+  overviewSkipsTransfer,
+} from "@/lib/overview-journey-meta";
 import {
   startSummaryItemFishType,
   startSummaryItemSeedSize,
@@ -44,11 +49,17 @@ export type JourneyRateRecord = {
   journeyNumber: number;
   shortId: string;
   journeyId: string;
+  district: string;
+  districtId: number | null;
   closedAt: string | null;
+  /** Sum of society unload quantities at final point (not start purchase qty). */
+  finalPointQuantity: number;
   suppliers: JourneyRateSupplierLine[];
   localTransporters: JourneyRateTransporterLine[];
   nonLocalTransporters: JourneyRateTransporterLine[];
 };
+
+export type VendorGovtRatesView = "vendors" | "govt";
 
 type TruckRow = Record<string, unknown> & {
   vehicle_number?: string;
@@ -76,6 +87,10 @@ function distanceForTruck(journey: JourneySummary, truck: TruckRow) {
     kilometers: totalDistanceKmFromLegs(legs, { skipTransfer }),
     distanceLegsLabel: formatDistanceLegs(legs, { skipTransfer }),
   };
+}
+
+export function totalSupplierQuantity(lines: JourneyRateSupplierLine[]): number {
+  return lines.reduce((sum, line) => sum + (Number(line.quantity) || 0), 0);
 }
 
 export function buildJourneySupplierLines(journey: JourneySummary): JourneyRateSupplierLine[] {
@@ -143,12 +158,30 @@ function buildTransporterLinesForScope(
   return lines;
 }
 
+function resolveClosedAt(journey: JourneySummary): string | null {
+  if (journey.finalTime) return journey.finalTime;
+  const trucks = journey.trucks ?? [];
+  let latest: string | null = null;
+  for (const t of trucks) {
+    const time = (t as { created_at?: string })?.created_at;
+    if (time) {
+      if (!latest || new Date(time).getTime() > new Date(latest).getTime()) {
+        latest = time;
+      }
+    }
+  }
+  return latest ?? journey.startTime ?? null;
+}
+
 export function buildJourneyRateRecord(journey: JourneySummary, journeyNumber: number): JourneyRateRecord {
   return {
     journeyNumber,
     shortId: journey.id,
     journeyId: journey.journeyId,
-    closedAt: journey.finalTime ?? null,
+    district: overviewFinalDistrict(journey.trucks),
+    districtId: overviewFinalDistrictId(journey.trucks),
+    closedAt: resolveClosedAt(journey),
+    finalPointQuantity: journeyFinalPointTotalQty(journey),
     suppliers: buildJourneySupplierLines(journey),
     localTransporters: buildTransporterLinesForScope(journey, "Local"),
     nonLocalTransporters: buildTransporterLinesForScope(journey, "Non-Local"),

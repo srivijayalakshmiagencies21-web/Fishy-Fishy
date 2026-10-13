@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { normalizeUserPages } from "@/lib/access";
 import { createClient } from "@/lib/supabase/server";
 
 export type SessionUser = {
@@ -24,7 +25,7 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
       id: typeof claims.sub === "string" ? claims.sub : "",
       email: typeof claims.email === "string" ? claims.email : "",
       role: access.role ?? "",
-      pages: access.pages ?? [],
+      pages: normalizeUserPages(access.pages ?? []),
     };
   }
 
@@ -37,6 +38,6 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     id: typeof claims.sub === "string" ? claims.sub : "",
     email: typeof claims.email === "string" ? claims.email : "",
     role: role ?? "",
-    pages: pages ?? [],
+    pages: normalizeUserPages(pages ?? []),
   };
 });

@@ -45,6 +45,16 @@ const JOURNEY_RATES_TRUCK_FIELDS = `
         supplier:supplier_id(name),
         fish:fish_id(fish_type, seed_size)
      ),
+     unload_drops:truck_unload_drops(
+        society_id,
+        society_name,
+        supplier_id,
+        fish_id,
+        quantity,
+        society:society_id(name),
+        supplier:supplier_id(name),
+        fish:fish_id(fish_type, seed_size)
+     ),
      ${JOURNEY_TRUCK_START_ITEMS_FIELD}
 `;
 
@@ -164,8 +174,8 @@ export async function loadJourneyRatesData(): Promise<{
       loadRateLinesByJourney(supabase),
     ]);
     const ordered = [...summaries].sort((a, b) => {
-      const aTime = a.finalTime ? Date.parse(a.finalTime) : 0;
-      const bTime = b.finalTime ? Date.parse(b.finalTime) : 0;
+      const aTime = a.finalTime ? Date.parse(a.finalTime) : (a.startTime ? Date.parse(a.startTime) : 0);
+      const bTime = b.finalTime ? Date.parse(b.finalTime) : (b.startTime ? Date.parse(b.startTime) : 0);
       if (bTime !== aTime) return bTime - aTime;
       return (numbers.get(b.journeyId) ?? 0) - (numbers.get(a.journeyId) ?? 0);
     });

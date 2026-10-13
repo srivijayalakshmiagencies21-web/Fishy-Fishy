@@ -1,10 +1,11 @@
 export const appPages = [
+  { key: "overview", label: "Overview", href: "/overview", description: "Operational overview and key performance indicators." },
   { key: "timeline", label: "Timeline", href: "/timeline", description: "Track active journeys across all points." },
   {
-    key: "journey-rates",
-    label: "Journey Rates",
-    href: "/journey-rates",
-    description: "Closed journeys: start quantities and transporter kilometres.",
+    key: "vendor-govt-rates",
+    label: "Vendor & Govt Rates",
+    href: "/vendor-govt-rates",
+    description: "Closed journeys: supplier quantities and transporter kilometres.",
   },
   {
     key: "finance-manager",
@@ -27,10 +28,25 @@ export const appPages = [
 
 export type AppPageKey = (typeof appPages)[number]["key"];
 
+/** Retired RBAC keys still stored on roles until migrations run. */
+const LEGACY_PAGE_KEYS: Record<string, AppPageKey> = {
+  "journey-rates": "vendor-govt-rates",
+};
+
+export function normalizeUserPages(pages: string[]): string[] {
+  const out = new Set<string>();
+  for (const page of pages) {
+    out.add(LEGACY_PAGE_KEYS[page] ?? page);
+  }
+  return [...out];
+}
+
 export function landingPath(pages: string[]) {
-  return appPages.find((page) => pages.includes(page.key))?.href ?? "/account";
+  const normalized = normalizeUserPages(pages);
+  return appPages.find((page) => normalized.includes(page.key))?.href ?? "/account";
 }
 
 export function pageLabel(key: string) {
-  return appPages.find((page) => page.key === key)?.label ?? key;
+  const normalized = LEGACY_PAGE_KEYS[key] ?? key;
+  return appPages.find((page) => page.key === normalized)?.label ?? normalized;
 }

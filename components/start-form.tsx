@@ -33,6 +33,7 @@ import { truckDisplayName } from "@/lib/journey-truck-labels";
 import { JourneySummaryCard } from "@/components/journey-summary-card";
 import { isValidMobile, mobileDigits, MOBILE_DIGITS } from "@/lib/phone";
 import { scrollCanvasToTop } from "@/lib/scroll-canvas";
+import { FixedOverlay, ModalOverlay } from "@/components/fixed-overlay";
 import { FloatingAddButton } from "@/components/floating-add-button";
 
 
@@ -521,7 +522,7 @@ export function StartPointForm({
         </button>
         {openDropdownId === journey.id ? (
           <>
-            <div className="fixed inset-0 z-10" onClick={() => setOpenDropdownId(null)} />
+            <FixedOverlay className="z-10" onClick={() => setOpenDropdownId(null)} aria-hidden />
             <div className="absolute right-0 mt-1 w-36 bg-white rounded-xl shadow-lg border border-slate-100 z-20 py-1 overflow-hidden">
               <button onClick={() => handleEditJourney(journey)} className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors">
                 Edit
@@ -594,7 +595,7 @@ export function StartPointForm({
         </JourneyPointLaneSection>
 
         {deleteJourneyId && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <ModalOverlay className="z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
             <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-gray-100">
               <h3 className="text-xl font-bold text-gray-900 mb-2">Delete Journey?</h3>
               <p className="text-sm text-gray-500 mb-6 leading-relaxed">Are you sure you want to delete this journey? This action cannot be undone and will permanently remove all associated truck and supplier data.</p>
@@ -615,7 +616,7 @@ export function StartPointForm({
                 </button>
               </div>
             </div>
-          </div>
+          </ModalOverlay>
         )}
 
         <div className="flex justify-center pt-8 mt-4">

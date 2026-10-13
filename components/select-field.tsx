@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 export type SelectOption = {
@@ -42,6 +42,9 @@ export function SelectField({
   disabled = false,
   autoSelectWhenSingle = true,
   searchable = false,
+  menuFooter,
+  menuExpanded = false,
+  emptyMessage,
 }: {
   name?: string;
   options: SelectOption[];
@@ -62,6 +65,12 @@ export function SelectField({
   autoSelectWhenSingle?: boolean;
   /** Type in the trigger field to filter options (no extra search row in the menu). */
   searchable?: boolean;
+  /** Rendered at the bottom of the open menu (e.g. “Add” actions). Stays inside the menu portal. */
+  menuFooter?: ReactNode;
+  /** Use a taller menu (e.g. footer with an inline form). */
+  menuExpanded?: boolean;
+  /** Shown when there are no options (single-select, non-searchable). */
+  emptyMessage?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -164,7 +173,7 @@ export function SelectField({
 
     const gap = 6;
     const viewportPad = 8;
-    const preferredMax = 240;
+    const preferredMax = menuExpanded ? 360 : 240;
     const spaceBelow = window.innerHeight - rect.bottom - gap - viewportPad;
     const spaceAbove = rect.top - gap - viewportPad;
     const openUpward = spaceBelow < 160 && spaceAbove > spaceBelow;
@@ -213,7 +222,7 @@ export function SelectField({
       window.removeEventListener("resize", placeMenu);
       window.removeEventListener("scroll", placeMenu, true);
     };
-  }, [open]);
+  }, [open, menuExpanded, menuFooter]);
 
   useEffect(() => {
     if (!open || !useInlineSearch) return;
@@ -341,7 +350,7 @@ export function SelectField({
         ? createPortal(
             <div
               ref={menuRef}
-              className="select-field-menu is-fixed"
+              className="select-field-menu is-fixed overflow-hidden"
               style={{
                 top: box.top,
                 left: box.left,
@@ -349,53 +358,69 @@ export function SelectField({
                 maxHeight: box.maxHeight,
               }}
             >
-              <ul
-                className="max-h-60 overflow-auto"
-                id={listId}
-                role="listbox"
-                aria-multiselectable={multiple}
-              >
-                {searchable && visibleOptions.length === 0 ? (
-                  <li className="select-field-empty px-3 py-2 text-sm text-muted">No matches</li>
-                ) : (
-                  (searchable ? visibleOptions : options).map((option) => {
-                    const isSelected = multiple
-                      ? selectedMulti.includes(option.value)
-                      : option.value === fieldValue;
-                    return (
-                      <li key={option.value}>
-                        <button
-                          type="button"
-                          role="option"
-                          aria-selected={isSelected}
-                          className={
-                            isSelected
-                              ? "is-selected flex w-full items-center justify-between text-left"
-                              : "flex w-full items-center justify-between text-left"
-                          }
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (multiple) {
-                              const newMulti = isSelected
-                                ? selectedMulti.filter((v) => v !== option.value)
-                                : [...selectedMulti, option.value];
-                              setSelectedMulti(newMulti);
-                              onChangeMultiple?.(newMulti);
-                            } else {
-                              commitSingle(option.value);
-                              closeMenu();
+              {!menuExpanded ? (
+                <ul
+                  className="max-h-60 overflow-auto"
+                  id={listId}
+                  role="listbox"
+                  aria-multiselectable={multiple}
+                >
+                  {!searchable && options.length === 0 && emptyMessage ? (
+                    <li className="select-field-empty px-3 py-2 text-sm text-muted">{emptyMessage}</li>
+                  ) : searchable && visibleOptions.length === 0 ? (
+                    <li className="select-field-empty px-3 py-2 text-sm text-muted">No matches</li>
+                  ) : (
+                    (searchable ? visibleOptions : options).map((option) => {
+                      const isSelected = multiple
+                        ? selectedMulti.includes(option.value)
+                        : option.value === fieldValue;
+                      return (
+                        <li key={option.value}>
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={isSelected}
+                            className={
+                              isSelected
+                                ? "is-selected flex w-full items-center justify-between text-left"
+                                : "flex w-full items-center justify-between text-left"
                             }
-                          }}
-                        >
-                          <SelectOptionContent option={option} />
-                          {isSelected ? <CheckIcon /> : null}
-                        </button>
-                      </li>
-                    );
-                  })
-                )}
-              </ul>
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (multiple) {
+                                const newMulti = isSelected
+                                  ? selectedMulti.filter((v) => v !== option.value)
+                                  : [...selectedMulti, option.value];
+                                setSelectedMulti(newMulti);
+                                onChangeMultiple?.(newMulti);
+                              } else {
+                                commitSingle(option.value);
+                                closeMenu();
+                              }
+                            }}
+                          >
+                            <SelectOptionContent option={option} />
+                            {isSelected ? <CheckIcon /> : null}
+                          </button>
+                        </li>
+                      );
+                    })
+                  )}
+                </ul>
+              ) : null}
+              {menuFooter ? (
+                <div
+                  className={
+                    menuExpanded
+                      ? "select-field-menu-footer px-2.5 py-2.5"
+                      : "select-field-menu-footer border-t border-line/80 px-2 py-1.5"
+                  }
+                  onMouseDown={(event) => event.preventDefault()}
+                >
+                  {menuFooter}
+                </div>
+              ) : null}
             </div>,
             document.body,
           )

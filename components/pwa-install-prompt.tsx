@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ModalOverlay } from "@/components/fixed-overlay";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -92,8 +93,8 @@ export function PwaInstallPrompt() {
       </div>
 
       {showIosGuide ? (
-        <div
-          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 p-4 backdrop-blur-sm sm:items-center"
+        <ModalOverlay
+          className="z-[100] flex items-end justify-center bg-black/50 p-4 backdrop-blur-sm sm:items-center"
           onClick={() => setShowIosGuide(false)}
         >
           <div
@@ -144,7 +145,7 @@ export function PwaInstallPrompt() {
               Got it
             </button>
           </div>
-        </div>
+        </ModalOverlay>
       ) : null}
     </>
   );

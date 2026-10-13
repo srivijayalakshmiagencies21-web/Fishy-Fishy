@@ -226,7 +226,7 @@ input[type="number"]::-webkit-inner-spin-button {
 .select-field-menu.is-fixed {
   position: fixed;
   right: auto;
-  z-index: 200;
+  z-index: 250;
 }
 
 .select-field-trigger-combobox {
@@ -489,11 +489,11 @@ input[type="number"]::-webkit-inner-spin-button {
   to { transform: scaleX(0.9); }
 }
 
-.select-field-menu li + li {
+.select-field-menu > ul > li + li {
   margin-top: 2px;
 }
 
-.select-field-menu button {
+.select-field-menu ul button {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -511,18 +511,22 @@ input[type="number"]::-webkit-inner-spin-button {
   cursor: pointer;
 }
 
-.select-field-menu button:hover {
+.select-field-menu ul button:hover {
   background: var(--brand-soft);
 }
 
-.select-field-menu button.is-selected {
+.select-field-menu ul button.is-selected {
   background: var(--brand-soft);
   color: var(--brand);
   font-weight: 650;
 }
 
-.select-field-menu button.is-selected:hover {
+.select-field-menu ul button.is-selected:hover {
   background: color-mix(in srgb, var(--brand) 16%, white);
+}
+
+.select-field-menu-footer {
+  background: var(--page);
 }
 
 .btn-primary {
@@ -848,15 +852,70 @@ input[type="number"]::-webkit-inner-spin-button {
   box-shadow: 0 1px 2px rgba(16, 42, 76, 0.04);
 }
 
+/* Page content renders before header in DOM so header aside can register synchronously. */
+.canvas-stack {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.canvas-stack > .canvas-page-header {
+  order: 1;
+  flex-shrink: 0;
+}
+
+.canvas-stack > .canvas-body {
+  order: 2;
+}
+
 .canvas-page-header {
   padding: 1.25rem 1.25rem 1rem;
   border-bottom: 1px solid var(--border);
 }
 
+.page-header-row {
+  --page-header-aside-width: 12.5rem;
+  /* Matches financial-year label + compact select (stable when FY mounts after title). */
+  --page-header-row-min-height: 3.5rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--page-header-aside-width);
+  align-items: center;
+  gap: 0.75rem 1rem;
+  min-height: var(--page-header-row-min-height);
+}
+
+@media (max-width: 479px) {
+  .page-header-row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .page-header-aside:not(:empty) {
+    justify-self: stretch;
+  }
+}
+
+.page-header-aside {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--page-header-row-min-height);
+  justify-self: end;
+  align-self: center;
+}
+
+.page-header-aside:empty {
+  min-height: 0;
+  pointer-events: none;
+}
+
 .page-title {
+  min-width: 0;
+  margin: 0;
   font-size: 1.25rem;
   font-weight: 650;
   letter-spacing: -0.02em;
+  line-height: 1.25;
 }
 
 .canvas-body {
@@ -867,6 +926,26 @@ input[type="number"]::-webkit-inner-spin-button {
   padding: 1.25rem;
 }
 
+.fixed-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+.modal-overlay {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 .mobile-tabbar {
   display: flex;
   position: fixed;
@@ -874,7 +953,8 @@ input[type="number"]::-webkit-inner-spin-button {
   left: 0;
   right: 0;
   bottom: 0;
-  min-height: var(--bottom-nav-height);
+  min-height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   border-radius: 20px 20px 0 0;
   background: linear-gradient(90deg, var(--brand) 0%, var(--brand-dark) 100%);
   box-shadow: 0 -4px 24px rgba(16, 42, 76, 0.12);
@@ -1023,7 +1103,9 @@ input[type="number"]::-webkit-inner-spin-button {
   position: fixed;
   z-index: 45;
   right: 1.25rem;
-  bottom: calc(var(--bottom-nav-height, 4.25rem) + 1.25rem);
+  bottom: calc(var(--bottom-nav-height, 4.25rem) + env(safe-area-inset-bottom, 0px) + 1.25rem);
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
 }
 
 @media (min-width: 768px) {

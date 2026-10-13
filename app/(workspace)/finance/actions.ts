@@ -5,6 +5,7 @@ import { readableError } from "@/lib/masters";
 import { loadFinanceCategories, type FinanceCategoryScope } from "@/lib/transactions.server";
 import { getSessionUser } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
+import { validateTransactionPartyForCategory } from "@/lib/finance-party-vendors";
 import {
   isCashPaymentMode,
   mapTransactionEndpointsToDb,
@@ -107,6 +108,7 @@ export async function createTransaction(_state: FormState, formData: FormData): 
   const journeyRaw = text(formData, "journey_id");
   let journey_id = journeyRaw || null;
   let district_id = Number(formData.get("district_id"));
+  let financial_year_id = Number(formData.get("financial_year_id"));
 
   if (!TXN_TYPES.has(type)) return fail("Choose a valid transaction type.");
   if (!txn_date) return fail("Choose a date.");
@@ -121,9 +123,32 @@ export async function createTransaction(_state: FormState, formData: FormData): 
   if (type === "transfer") {
     journey_id = null;
     district_id = NaN;
+    financial_year_id = NaN;
   }
 
   if (!category) return fail("Choose a category.");
+
+  if (type !== "transfer" && party.trim()) {
+    const supabaseForParty = await createClient();
+    const [vendorResult, districtResult] = await Promise.all([
+      supabaseForParty.from("vendors").select("name, vendor_type, transporter_scope"),
+      supabaseForParty.from("districts").select("name"),
+    ]);
+    if (vendorResult.error) return fail("Could not load vendors.");
+    if (districtResult.error) return fail("Could not load districts.");
+    const partyError = validateTransactionPartyForCategory(
+      party,
+      category,
+      (vendorResult.data ?? []).map((row) => ({
+        name: row.name,
+        vendorType: row.vendor_type,
+        transporterScope: row.transporter_scope,
+      })),
+      (districtResult.data ?? []).map((row) => row.name).filter(Boolean),
+    );
+    if (partyError) return fail(partyError);
+  }
+
   const user = await getSessionUser();
   if (!user) return fail("Sign in to save transactions.");
   const categoryScope = categoryScopeFromForm(formData, user.pages);
@@ -142,7 +167,13 @@ export async function createTransaction(_state: FormState, formData: FormData): 
   const categoryRow = categories.find((row) => row.name.toLowerCase() === category.toLowerCase());
   const allocation =
     type === "transfer"
-      ? { showDistrict: false, showJourney: false, requireDistrict: false }
+      ? {
+          showDistrict: false,
+          showJourney: false,
+          requireDistrict: false,
+          showFinancialYear: false,
+          requireFinancialYear: false,
+        }
       : transactionAllocationFields(
           categoryRow
             ? {
@@ -150,6 +181,7 @@ export async function createTransaction(_state: FormState, formData: FormData): 
                 default_allocation: categoryRow.default_allocation as "company" | "project",
               }
             : null,
+          type,
         );
 
   if (!allocation.showDistrict) {
@@ -159,11 +191,33 @@ export async function createTransaction(_state: FormState, formData: FormData): 
     journey_id = null;
   }
 
+  if (!allocation.showFinancialYear) {
+    financial_year_id = NaN;
+  } else if (allocation.requireFinancialYear) {
+    if (!Number.isFinite(financial_year_id) || financial_year_id <= 0) {
+      return fail("Choose a financial year.");
+    }
+  }
+
   if (allocation.requireDistrict) {
     if (!Number.isFinite(district_id) || district_id <= 0) return fail("Choose a district.");
   }
 
   const supabase = await createClient();
+
+  if (allocation.showFinancialYear && Number.isFinite(financial_year_id) && financial_year_id > 0) {
+    const { data: tagged, error: tagError } = await (supabase as any)
+      .from("financial_year_districts")
+      .select("district_id")
+      .eq("financial_year_id", financial_year_id);
+    if (tagError) return fail("Could not verify financial year districts.");
+    const allowed = new Set(
+      (tagged ?? []).map((row: { district_id: number }) => row.district_id).filter((id: number) => id > 0),
+    );
+    if (allowed.size > 0 && !allowed.has(district_id)) {
+      return fail("That district is not tagged for the selected financial year.");
+    }
+  }
 
   if (categoryScope === "role") {
     try {
@@ -222,7 +276,7 @@ export async function createTransaction(_state: FormState, formData: FormData): 
     }
   }
 
-  const { error } = await supabase.from("transactions").insert({
+  const { error } = await (supabase as any).from("transactions").insert({
     type,
     txn_date,
     account_id,
@@ -235,6 +289,10 @@ export async function createTransaction(_state: FormState, formData: FormData): 
     journey_id: allocation.showJourney ? journey_id : null,
     district_id:
       allocation.showDistrict && Number.isFinite(district_id) && district_id > 0 ? district_id : null,
+    financial_year_id:
+      allocation.showFinancialYear && Number.isFinite(financial_year_id) && financial_year_id > 0
+        ? financial_year_id
+        : null,
     created_by: user.id || null,
   });
 

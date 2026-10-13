@@ -514,7 +514,8 @@ export type Database = {
         Row: {
           id: string;
           truck_id: string;
-          society_id: number;
+          society_id: number | null;
+          society_name: string | null;
           supplier_id: number;
           fish_id: number;
           quantity: number;
@@ -523,7 +524,8 @@ export type Database = {
         Insert: {
           id?: string;
           truck_id: string;
-          society_id: number;
+          society_id?: number | null;
+          society_name?: string | null;
           supplier_id: number;
           fish_id: number;
           quantity: number;
@@ -532,7 +534,8 @@ export type Database = {
         Update: {
           id?: string;
           truck_id?: string;
-          society_id?: number;
+          society_id?: number | null;
+          society_name?: string | null;
           supplier_id?: number;
           fish_id?: number;
           quantity?: number;
