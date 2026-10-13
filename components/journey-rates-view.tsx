@@ -971,6 +971,7 @@ export function JourneyRatesView({
   initialRateTexts,
   error,
   financialYears,
+  financialYearLabel,
   districts,
   govtLedgerRows,
   canEditGovtSetup,
@@ -979,6 +980,8 @@ export function JourneyRatesView({
   initialRateTexts: Record<string, string>;
   error: string | null;
   financialYears: FinancialYear[];
+  /** Header-selected FY that `rows` / `govtLedgerRows` are already filtered to. */
+  financialYearLabel: string | null;
   districts: DistrictRow[];
   govtLedgerRows: GovtRateLedgerRow[];
   canEditGovtSetup: boolean;
@@ -1055,7 +1058,9 @@ export function JourneyRatesView({
 
       {showVendorJourneys && !error && rows.length === 0 ? (
         <p className="rounded-xl border border-line bg-blue-soft px-4 py-3 text-sm text-muted">
-          No closed journeys yet. Rates appear here after a journey is completed at Final Point.
+          {financialYearLabel
+            ? `No closed journeys in FY ${financialYearLabel}. Rates appear here after a journey is completed at Final Point.`
+            : "No closed journeys yet. Rates appear here after a journey is completed at Final Point."}
         </p>
       ) : null}
 

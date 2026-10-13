@@ -37,8 +37,9 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  // Keep layout height stable when the on-screen keyboard opens (pairs with svh app shell).
-  interactiveWidget: "overlays-content",
+  // Layout stays fixed when the keyboard opens (no jumps); only the visual viewport shrinks,
+  // which modals/dropdowns track via `window.visualViewport` to stay above the keyboard.
+  interactiveWidget: "resizes-visual",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

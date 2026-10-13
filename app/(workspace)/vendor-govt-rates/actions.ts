@@ -1,6 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import {
+  revalidateFinancialYearViews,
+  setSelectedFinancialYearCookie,
+} from "@/lib/revalidate-financial-year.server";
 import { loadFinancialYears } from "@/lib/financial-year.server";
 import { getSessionUser } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
@@ -43,7 +46,7 @@ export async function saveJourneyRateLine(
 
   if (error) return { error: error.message };
 
-  revalidatePath("/vendor-govt-rates");
+  revalidateFinancialYearViews();
   return null;
 }
 
@@ -157,7 +160,8 @@ export async function createGovtLedgerRow(
     if (companiesError) return { error: companiesError.message };
   }
 
-  revalidatePath("/vendor-govt-rates");
+  await setSelectedFinancialYearCookie(financialYearId);
+  revalidateFinancialYearViews();
   return { ok: true };
 }
 
@@ -200,7 +204,7 @@ export async function updateGovtLedgerField(
 
   if (error) return { error: error.message };
 
-  revalidatePath("/vendor-govt-rates");
+  revalidateFinancialYearViews();
   return null;
 }
 
@@ -277,6 +281,6 @@ export async function saveGovtLedgerBatch(
     if (error) return { error: error.message };
   }
 
-  revalidatePath("/vendor-govt-rates");
+  revalidateFinancialYearViews();
   return { ok: true };
 }

@@ -43,6 +43,31 @@ function useModalViewport(overlayRef: React.RefObject<HTMLElement | null>, activ
     if (!vv) return;
     let frame = 0;
     let overlay: HTMLElement | null = null;
+    let lastHeight = vv.height;
+
+    function revealableTarget(node: EventTarget | Element | null) {
+      if (!(node instanceof HTMLElement)) return null;
+      if (!overlayRef.current?.contains(node)) return null;
+      // Dropdown fields scroll themselves to leave room for their menu above the keyboard.
+      if (node.closest(".select-field")) return null;
+      return node;
+    }
+
+    function revealField(target: HTMLElement) {
+      try {
+        target.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+      } catch {
+        // ignore
+      }
+      const scrollable =
+        target.closest<HTMLElement>("[data-modal-scroll]") ??
+        target.closest<HTMLElement>(".modal-body-scroll");
+      if (scrollable) {
+        const scrollTop =
+          target.offsetTop - scrollable.offsetTop - scrollable.clientHeight / 2 + target.clientHeight / 2;
+        scrollable.scrollTop = Math.max(0, scrollTop);
+      }
+    }
 
     function applyViewport() {
       frame = 0;
@@ -53,6 +78,11 @@ function useModalViewport(overlayRef: React.RefObject<HTMLElement | null>, activ
       overlay.style.width = `${vv.width}px`;
       overlay.style.height = `${vv.height}px`;
       overlay.style.setProperty("--modal-visible-height", `${vv.height}px`);
+
+      const shrank = vv.height < lastHeight - 1;
+      lastHeight = vv.height;
+      const focused = shrank ? revealableTarget(document.activeElement) : null;
+      if (focused) revealField(focused);
     }
 
     function scheduleApply() {
@@ -60,32 +90,9 @@ function useModalViewport(overlayRef: React.RefObject<HTMLElement | null>, activ
     }
 
     function scrollFocusedIntoView(event: FocusEvent) {
-      const target = event.target;
-      if (!(target instanceof HTMLElement)) return;
-      if (!overlayRef.current?.contains(target)) return;
-      // Dropdown fields scroll themselves to leave room for their menu above the keyboard.
-      if (target.closest(".select-field")) return;
-
-      const scrollable =
-        target.closest<HTMLElement>("[data-modal-scroll]") ??
-        target.closest<HTMLElement>(".modal-body-scroll");
-
-      const delay = 320;
-      window.setTimeout(() => {
-        try {
-          target.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
-        } catch {
-          // ignore
-        }
-        if (scrollable) {
-          const scrollTop =
-            target.offsetTop -
-            scrollable.offsetTop -
-            scrollable.clientHeight / 2 +
-            target.clientHeight / 2;
-          scrollable.scrollTop = Math.max(0, scrollTop);
-        }
-      }, delay);
+      const target = revealableTarget(event.target);
+      if (!target) return;
+      window.setTimeout(() => revealField(target), 320);
     }
 
     applyViewport();

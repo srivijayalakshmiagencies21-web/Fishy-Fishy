@@ -1,16 +1,13 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
 import {
-  FINANCIAL_YEAR_COOKIE,
-  financialYearFromAprilStartYear,
-} from "@/lib/financial-year";
+  revalidateFinancialYearViews,
+  setSelectedFinancialYearCookie,
+} from "@/lib/revalidate-financial-year.server";
+import { financialYearFromAprilStartYear } from "@/lib/financial-year";
 import { loadFinancialYears } from "@/lib/financial-year.server";
 import { getSessionUser } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
-
-const COOKIE_MAX_AGE = 60 * 60 * 24 * 400;
 
 export async function selectFinancialYear(financialYearId: number): Promise<{ error?: string }> {
   const user = await getSessionUser();
@@ -21,16 +18,8 @@ export async function selectFinancialYear(financialYearId: number): Promise<{ er
     return { error: "Unknown financial year." };
   }
 
-  const cookieStore = await cookies();
-  cookieStore.set(FINANCIAL_YEAR_COOKIE, String(financialYearId), {
-    path: "/",
-    sameSite: "lax",
-    maxAge: COOKIE_MAX_AGE,
-  });
-
-  revalidatePath("/vendor-govt-rates");
-  revalidatePath("/overview");
-  revalidatePath("/timeline");
+  await setSelectedFinancialYearCookie(financialYearId);
+  revalidateFinancialYearViews();
   return {};
 }
 
@@ -66,14 +55,8 @@ export async function createFinancialYear(
     return { error: error.message };
   }
 
-  const cookieStore = await cookies();
-  cookieStore.set(FINANCIAL_YEAR_COOKIE, String(data.id), {
-    path: "/",
-    sameSite: "lax",
-    maxAge: COOKIE_MAX_AGE,
-  });
-
-  revalidatePath("/vendor-govt-rates");
+  await setSelectedFinancialYearCookie(data.id as number);
+  revalidateFinancialYearViews();
   return { ok: true, id: data.id as number };
 }
 
@@ -131,6 +114,6 @@ export async function saveFinancialYearDistricts(
     if (insertError) return { error: insertError.message };
   }
 
-  revalidatePath("/vendor-govt-rates");
+  revalidateFinancialYearViews();
   return { ok: true };
 }
