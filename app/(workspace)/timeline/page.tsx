@@ -1,7 +1,5 @@
 import { redirect } from "next/navigation";
-import { FinancialYearPicker } from "@/components/financial-year-picker";
 import { OverviewTracker } from "@/components/overview-tracker";
-import { PageHeaderAside } from "@/components/page-header-aside";
 import { landingPath } from "@/lib/access";
 import { loadOverviewJourneys } from "@/lib/cached-journeys.server";
 import { resolveSelectedFinancialYearId } from "@/lib/financial-year.server";
@@ -33,14 +31,6 @@ export default async function TimelinePage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-12">
-      <PageHeaderAside>
-        <FinancialYearPicker
-          years={financialYears}
-          selectedYearId={selectedYearId}
-          autoSelectWhenSingle
-        />
-      </PageHeaderAside>
-
       <OverviewTracker
         journeys={journeys}
         districtFulfillmentRows={districtFulfillmentRows}

@@ -6,8 +6,11 @@ import { useEffect, useRef, useState, startTransition } from "react";
 import { flushSync } from "react-dom";
 import { prefetchMasters } from "@/components/master-cache";
 import { useNavIntent } from "@/components/nav-intent";
+import { PageHeaderFinancialYear } from "@/components/page-header-financial-year";
 import { PageHeaderAsideProvider, PageHeaderAsideSlot } from "@/components/page-header-aside";
 import { appPages } from "@/lib/access";
+import type { FinancialYear } from "@/lib/financial-year";
+import { showsFinancialYearInHeader } from "@/lib/financial-year-header";
 import { masterLinks } from "@/lib/master-links";
 import { createClient } from "@/lib/supabase/client";
 
@@ -15,6 +18,8 @@ type AppShellProps = {
   email: string;
   role: string;
   pages: string[];
+  financialYears: FinancialYear[];
+  selectedFinancialYearId: number | null;
   children: React.ReactNode;
 };
 
@@ -26,8 +31,16 @@ function navIsActive(key: string, pathname: string) {
   return pathname === navItems.find((item) => item.key === key)?.href;
 }
 
-export function AppShell({ email, role, pages, children }: AppShellProps) {
+export function AppShell({
+  email,
+  role,
+  pages,
+  financialYears,
+  selectedFinancialYearId,
+  children,
+}: AppShellProps) {
   const pathname = usePathname();
+  const showFinancialYearHeader = showsFinancialYearInHeader(pathname);
   const router = useRouter();
   const { adminTab, previewMaster, armAdmin, armMaster } = useNavIntent();
   const [collapsed, setCollapsed] = useState(false);
@@ -68,6 +81,11 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
   useEffect(() => {
     document.documentElement.style.setProperty("--sidebar-width", collapsed ? "5.25rem" : "16rem");
   }, [collapsed]);
+
+  useEffect(() => {
+    document.documentElement.classList.add("app-shell-active");
+    return () => document.documentElement.classList.remove("app-shell-active");
+  }, []);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -172,7 +190,7 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
   const timeStr = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase();
 
   return (
-    <div className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-transparent text-[var(--text-primary)]">
+    <div className="app-viewport flex flex-col overflow-hidden bg-transparent text-[var(--text-primary)]">
       {pendingHref ? <div key={pendingHref} className="nav-progress" aria-hidden="true" /> : null}
       <header className="app-header">
         <div className="header-inner">
@@ -278,7 +296,9 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
             <div className="canvas-stack">
             <div className="canvas-body">{children}</div>
             <div className="canvas-page-header">
-              <div className="page-header-row">
+              <div
+                className={`page-header-row${showFinancialYearHeader ? " page-header-row--with-aside" : ""}`}
+              >
                 <h1 className="page-title">
                   {onUsers
                     ? (pages.includes("users") ? "Users & Roles" : "Users")
@@ -288,7 +308,14 @@ export function AppShell({ email, role, pages, children }: AppShellProps) {
                         ? (shownMaster?.label ?? "Masters")
                         : (currentPage?.label ?? "Fishy-Fishy")}
                 </h1>
-                <PageHeaderAsideSlot />
+                {showFinancialYearHeader ? (
+                  <PageHeaderFinancialYear
+                    years={financialYears}
+                    selectedYearId={selectedFinancialYearId}
+                  />
+                ) : (
+                  <PageHeaderAsideSlot />
+                )}
               </div>
               {onMasters ? (
                 <div className="segmented-control mt-4" role="tablist" aria-label="Masters">

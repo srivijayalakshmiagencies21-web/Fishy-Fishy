@@ -1,7 +1,5 @@
 import { redirect } from "next/navigation";
 import { landingPath } from "@/lib/access";
-import { FinancialYearPicker } from "@/components/financial-year-picker";
-import { PageHeaderAside } from "@/components/page-header-aside";
 import { OverviewWorkspace } from "@/components/overview-workspace";
 import { resolveSelectedFinancialYearId } from "@/lib/financial-year.server";
 import { loadFinalPointQtyByDistrictForYear } from "@/lib/overview-current-sales.server";
@@ -49,14 +47,6 @@ export default async function OverviewPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-12">
-      <PageHeaderAside>
-        <FinancialYearPicker
-          years={financialYears}
-          selectedYearId={selectedYearId}
-          autoSelectWhenSingle
-        />
-      </PageHeaderAside>
-
       <OverviewWorkspace
         salesRows={salesRows}
         finalPointQtyByDistrict={finalPointQtyByDistrict}

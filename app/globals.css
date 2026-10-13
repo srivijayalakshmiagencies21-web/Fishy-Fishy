@@ -57,6 +57,36 @@ html, body {
   min-height: 100%;
 }
 
+/* Stable shell height on mobile — dvh shrinks with the keyboard and reflows the layout. */
+.app-viewport {
+  height: 100svh;
+  max-height: 100svh;
+}
+
+@media (min-width: 768px) {
+  .app-viewport {
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+}
+
+@media (max-width: 767px) {
+  html.app-shell-active,
+  html.app-shell-active body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  /* iOS zooms focused inputs below 16px and shifts the whole viewport. */
+  .input-field,
+  .select-field-trigger,
+  .select-field-combobox-input,
+  textarea.input-field {
+    font-size: 1rem;
+  }
+}
+
 body {
   margin: 0;
   background: transparent;
@@ -884,11 +914,13 @@ input[type="number"]::-webkit-inner-spin-button {
   min-height: var(--page-header-row-min-height);
 }
 
+.page-header-row--with-aside,
 .page-header-row:has(.page-header-aside--active) {
   grid-template-columns: minmax(0, 1fr) var(--page-header-aside-width);
 }
 
 @media (max-width: 479px) {
+  .page-header-row--with-aside,
   .page-header-row:has(.page-header-aside--active) {
     --page-header-aside-width: 9.25rem;
     gap: 0.35rem 0.5rem;

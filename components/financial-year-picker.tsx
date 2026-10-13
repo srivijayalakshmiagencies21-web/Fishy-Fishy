@@ -43,27 +43,29 @@ export function FinancialYearPicker({
       <span className="text-[0.58rem] font-bold uppercase leading-none tracking-wide text-muted sm:text-[0.65rem] sm:tracking-widest">
         Financial year
       </span>
-      <select
-        className={`${nativeSelectClass} sm:hidden`}
-        value={value}
-        disabled={disabled}
-        aria-label="Financial year"
-        onChange={(event) => onPick(event.target.value)}
-      >
-        {years.length === 0 ? (
-          <option value="">Configure FY in Govt rates</option>
-        ) : (
-          <>
-            {!value ? <option value="">Select FY</option> : null}
-            {options.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </>
-        )}
-      </select>
-      <div className="hidden sm:block">
+      <div className="sm:hidden">
+        <select
+          className={nativeSelectClass}
+          value={value}
+          disabled={disabled}
+          aria-label="Financial year"
+          onChange={(event) => onPick(event.target.value)}
+        >
+          {years.length === 0 ? (
+            <option value="">Configure FY in Govt rates</option>
+          ) : (
+            <>
+              {!value ? <option value="">Select FY</option> : null}
+              {options.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </>
+          )}
+        </select>
+      </div>
+      <div className="hidden sm:block min-w-0">
         <SelectField
           compact
           placeholder={years.length === 0 ? "Configure FY in Govt rates" : "Select FY"}

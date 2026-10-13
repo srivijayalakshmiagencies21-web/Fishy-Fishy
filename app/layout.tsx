@@ -37,7 +37,8 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  interactiveWidget: "resizes-content",
+  // Keep layout height stable when the on-screen keyboard opens (pairs with svh app shell).
+  interactiveWidget: "overlays-content",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
