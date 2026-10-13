@@ -3,6 +3,9 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { readCustomParties, readPcCustomParties } from "@/lib/finance-party-memory";
+import { computeMenuBox, trackMenuPlacement, type MenuBox } from "@/lib/floating-menu";
+
+const MENU_MAX_HEIGHT = 280;
 
 type PartySuggestionGroup = {
   id: string;
@@ -76,12 +79,7 @@ export function PartyField({
   const [open, setOpen] = useState(false);
   /** Filters the suggestion menu only; empty string shows full Vendor / District / Society lists. */
   const [menuFilter, setMenuFilter] = useState("");
-  const [box, setBox] = useState<{
-    top: number;
-    left: number;
-    width: number;
-    maxHeight: number;
-  } | null>(null);
+  const [box, setBox] = useState<MenuBox | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -139,32 +137,7 @@ export function PartyField({
   function placeMenu() {
     const rect = rootRef.current?.getBoundingClientRect();
     if (!rect) return;
-
-    const gap = 6;
-    const viewportPad = 8;
-    const preferredMax = 280;
-    const spaceBelow = window.innerHeight - rect.bottom - gap - viewportPad;
-    const spaceAbove = rect.top - gap - viewportPad;
-    const openUpward = spaceBelow < 160 && spaceAbove > spaceBelow;
-
-    if (openUpward) {
-      const maxHeight = Math.min(preferredMax, Math.max(80, spaceAbove));
-      setBox({
-        top: rect.top - gap - maxHeight,
-        left: rect.left,
-        width: rect.width,
-        maxHeight,
-      });
-      return;
-    }
-
-    const maxHeight = Math.min(preferredMax, Math.max(80, spaceBelow));
-    setBox({
-      top: rect.bottom + gap,
-      left: rect.left,
-      width: rect.width,
-      maxHeight,
-    });
+    setBox(computeMenuBox(rect, MENU_MAX_HEIGHT));
   }
 
   function openMenu(showAll = true) {
@@ -210,16 +183,13 @@ export function PartyField({
       if (event.key === "Escape") closeMenu();
     }
 
-    placeMenu();
+    const stopTracking = trackMenuPlacement(rootRef.current, MENU_MAX_HEIGHT, placeMenu);
     document.addEventListener("mousedown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
-    window.addEventListener("resize", placeMenu);
-    window.addEventListener("scroll", placeMenu, true);
     return () => {
+      stopTracking();
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("resize", placeMenu);
-      window.removeEventListener("scroll", placeMenu, true);
     };
   }, [open]);
 

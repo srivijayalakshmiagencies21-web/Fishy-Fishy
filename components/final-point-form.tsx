@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useDebouncedLocalStorage } from "@/lib/use-debounced-storage";
 import {
   useActionState,
   useEffect,
@@ -1471,19 +1472,24 @@ export function FinalPointForm({
     setDraftsHydrated(true);
   }, [journeys]);
 
-  useEffect(() => {
-    if (!draftsHydrated) return;
+  const draftsToStore = useMemo(() => {
     const activeIds = new Set(journeys.map((journey) => journey.id));
     const toStore: Record<string, UnloadDraft> = {};
     for (const [journeyId, draft] of Object.entries(drafts)) {
       if (activeIds.has(journeyId)) toStore[journeyId] = draft;
     }
-    localStorage.setItem(UNLOAD_DRAFTS_STORAGE_KEY, JSON.stringify(toStore));
-  }, [drafts, draftsHydrated, journeys]);
+    return toStore;
+  }, [drafts, journeys]);
+  const { flush: flushStoredDrafts } = useDebouncedLocalStorage(
+    UNLOAD_DRAFTS_STORAGE_KEY,
+    draftsToStore,
+    draftsHydrated,
+  );
 
   async function openUnload(journey: JourneySummary) {
     const phase = normalizeJourneyPhase(journey.phase);
     const alreadyOnFinalLeg = phase === JourneyPhase.Final || phase === JourneyPhase.Closed;
+    flushStoredDrafts();
 
     setDrafts((prev) => {
       const stored = readStoredUnloadDrafts()[journey.id];
@@ -1559,9 +1565,10 @@ export function FinalPointForm({
   const recordingJourney = viewState === "record" ? journeys.find((j) => j.id === recordingId) : null;
 
   if (viewState === "record" && recordingJourney) {
-    const storedUnload = readStoredUnloadDrafts()[recordingJourney.id];
+    const existingDraft = drafts[recordingJourney.id];
+    const storedUnload = existingDraft ? undefined : readStoredUnloadDrafts()[recordingJourney.id];
     const draft =
-      drafts[recordingJourney.id] ??
+      existingDraft ??
       (journeyUnloadSubmitted(recordingJourney)
         ? draftFromRecordedUnload(recordingJourney, storedUnload)
         : mergeUnloadDraft(recordingJourney, storedUnload));

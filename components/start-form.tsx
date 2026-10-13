@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState, useEffect, useActionState } from "react";
+import { useRef, useState, useEffect, useActionState, useMemo } from "react";
+import { useDebouncedLocalStorage } from "@/lib/use-debounced-storage";
 import type { DistrictRow, FishRow, VendorRow } from "@/lib/masters";
 import { OdometerSummaryDetail } from "@/components/odometer-summary-detail";
 import { resolveStageOdometer } from "@/lib/journey-odometer-legs";
@@ -205,11 +206,12 @@ export function StartPointForm({
     setTrucks((prev) => applySingleMasterDefaults(prev, transporters, suppliers));
   }, [isLoaded, transporters, suppliers]);
 
-  useEffect(() => {
-    if (isLoaded && !editingId) {
-      localStorage.setItem("journey_draft", JSON.stringify({ route, trucks }));
-    }
-  }, [route, trucks, isLoaded, editingId]);
+  const journeyDraft = useMemo(() => ({ route, trucks }), [route, trucks]);
+  const { discard: discardPendingDraft } = useDebouncedLocalStorage(
+    "journey_draft",
+    journeyDraft,
+    isLoaded && !editingId,
+  );
 
   useEffect(() => {
     if (!state?.success) return;
@@ -219,6 +221,7 @@ export function StartPointForm({
     setEditingId(null);
     setSubmitError(null);
     setActiveTruck(0);
+    discardPendingDraft();
     localStorage.removeItem("journey_draft");
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -689,6 +692,7 @@ export function StartPointForm({
             return;
           }
 
+          discardPendingDraft();
           localStorage.removeItem("journey_draft");
           const formData = new FormData(form);
           formData.set("payload", JSON.stringify({ route, trucks }));

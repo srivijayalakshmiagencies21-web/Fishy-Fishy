@@ -46,7 +46,6 @@ export function AppShell({
   const [collapsed, setCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
-  const [now, setNow] = useState(() => new Date());
   const [pendingNav, setPendingNav] = useState<{ href: string; from: string } | null>(null);
   const pendingHref = pendingNav && pendingNav.from === pathname ? pendingNav.href : null;
   const activePath = pendingHref ?? pathname;
@@ -149,12 +148,6 @@ export function AppShell({
   }
 
   useEffect(() => {
-    const tick = () => setNow(new Date());
-    const id = window.setInterval(tick, 30000);
-    return () => window.clearInterval(id);
-  }, []);
-
-  useEffect(() => {
     document.querySelector(".canvas-body")?.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [pathname]);
 
@@ -185,10 +178,6 @@ export function AppShell({
     router.refresh();
   }
 
-  const dayName = now.toLocaleDateString("en-US", { weekday: "long" }).toUpperCase();
-  const monthDay = now.toLocaleDateString("en-US", { month: "long", day: "numeric" }).toUpperCase();
-  const timeStr = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase();
-
   return (
     <div className="app-viewport flex flex-col overflow-hidden bg-transparent text-[var(--text-primary)]">
       {pendingHref ? <div key={pendingHref} className="nav-progress" aria-hidden="true" /> : null}
@@ -202,13 +191,7 @@ export function AppShell({
             </div>
             <p className="header-tagline">Seed logistics</p>
           </div>
-          <div className="header-clock hidden items-center justify-center md:flex">
-            <span suppressHydrationWarning>{dayName}</span>
-            <span className="header-clock-sep">|</span>
-            <span suppressHydrationWarning>{monthDay}</span>
-            <span className="header-clock-sep">|</span>
-            <span suppressHydrationWarning>{timeStr}</span>
-          </div>
+          <HeaderClock />
           <div className="header-side header-side--right">
             <div className="relative" ref={accountMenuRef}>
               <button
@@ -410,6 +393,38 @@ export function AppShell({
           );
         })}
       </nav>
+    </div>
+  );
+}
+
+function HeaderClock() {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    let timer: number;
+    function scheduleNextMinute() {
+      const current = new Date();
+      const msToNextMinute = 60_000 - (current.getSeconds() * 1000 + current.getMilliseconds());
+      timer = window.setTimeout(() => {
+        setNow(new Date());
+        scheduleNextMinute();
+      }, msToNextMinute);
+    }
+    scheduleNextMinute();
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const dayName = now.toLocaleDateString("en-US", { weekday: "long" }).toUpperCase();
+  const monthDay = now.toLocaleDateString("en-US", { month: "long", day: "numeric" }).toUpperCase();
+  const timeStr = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }).toUpperCase();
+
+  return (
+    <div className="header-clock hidden items-center justify-center md:flex">
+      <span suppressHydrationWarning>{dayName}</span>
+      <span className="header-clock-sep">|</span>
+      <span suppressHydrationWarning>{monthDay}</span>
+      <span className="header-clock-sep">|</span>
+      <span suppressHydrationWarning>{timeStr}</span>
     </div>
   );
 }

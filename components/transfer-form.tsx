@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useDebouncedLocalStorage } from "@/lib/use-debounced-storage";
 import {
   useActionState,
   useEffect,
@@ -1641,17 +1642,22 @@ export function TransferPointForm({
     setDraftsHydrated(true);
   }, [activeJourneys]);
 
-  useEffect(() => {
-    if (!draftsHydrated) return;
+  const draftsToStore = useMemo(() => {
     const activeIds = new Set(activeJourneys.map((journey) => journey.id));
     const toStore: Record<string, TransferDraft> = {};
     for (const [journeyId, draft] of Object.entries(drafts)) {
       if (activeIds.has(journeyId)) toStore[journeyId] = draft;
     }
-    localStorage.setItem(TRANSFER_DRAFTS_STORAGE_KEY, JSON.stringify(toStore));
-  }, [drafts, draftsHydrated, activeJourneys]);
+    return toStore;
+  }, [drafts, activeJourneys]);
+  const { flush: flushStoredDrafts } = useDebouncedLocalStorage(
+    TRANSFER_DRAFTS_STORAGE_KEY,
+    draftsToStore,
+    draftsHydrated,
+  );
 
   function openRecording(journey: Journey) {
+    flushStoredDrafts();
     const stored = readStoredTransferDrafts()[journey.id];
     const fresh = buildPrimaryLines(journey);
     const primaryLines = resolvePrimaryLineInventory(
@@ -1721,18 +1727,13 @@ export function TransferPointForm({
   const recordingJourney = viewState === "record" ? activeJourneys.find((j) => j.id === recordingId) : null;
 
   if (viewState === "record" && recordingJourney) {
-    const stored = readStoredTransferDrafts()[recordingJourney.id];
+    const existingDraft = drafts[recordingJourney.id];
+    const knownLines = linesByJourney[recordingJourney.id] ?? existingDraft?.inventoryLines;
+    const stored =
+      existingDraft && knownLines ? undefined : readStoredTransferDrafts()[recordingJourney.id];
     const fresh = buildPrimaryLines(recordingJourney);
-    const resolved = resolvePrimaryLineInventory(
-      fresh,
-      linesByJourney[recordingJourney.id] ??
-        drafts[recordingJourney.id]?.inventoryLines ??
-        stored?.inventoryLines,
-    );
-    const primaryLines = resolved;
-    const draft =
-      drafts[recordingJourney.id] ??
-      mergeTransferDraft(recordingJourney, primaryLines, stored);
+    const primaryLines = resolvePrimaryLineInventory(fresh, knownLines ?? stored?.inventoryLines);
+    const draft = existingDraft ?? mergeTransferDraft(recordingJourney, primaryLines, stored);
 
     return (
       <div className="mx-auto w-full max-w-4xl space-y-6 px-2 pb-20 sm:px-0 sm:pb-12">

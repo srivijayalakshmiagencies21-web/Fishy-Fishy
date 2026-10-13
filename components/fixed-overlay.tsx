@@ -41,23 +41,30 @@ function useModalViewport(overlayRef: React.RefObject<HTMLElement | null>, activ
     if (!active) return;
     const vv = window.visualViewport;
     if (!vv) return;
+    let frame = 0;
+    let overlay: HTMLElement | null = null;
 
     function applyViewport() {
-      const el = overlayRef.current;
-      if (!el || !window.visualViewport) return;
-      const v = window.visualViewport;
-      el.style.top = `${v.offsetTop}px`;
-      el.style.left = `${v.offsetLeft}px`;
-      el.style.width = `${v.width}px`;
-      el.style.height = `${v.height}px`;
-      el.style.setProperty("--modal-visible-height", `${v.height}px`);
+      frame = 0;
+      overlay = overlayRef.current;
+      if (!vv || !overlay) return;
+      overlay.style.top = `${vv.offsetTop}px`;
+      overlay.style.left = `${vv.offsetLeft}px`;
+      overlay.style.width = `${vv.width}px`;
+      overlay.style.height = `${vv.height}px`;
+      overlay.style.setProperty("--modal-visible-height", `${vv.height}px`);
+    }
+
+    function scheduleApply() {
+      if (!frame) frame = requestAnimationFrame(applyViewport);
     }
 
     function scrollFocusedIntoView(event: FocusEvent) {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
-      const el = overlayRef.current;
-      if (!el?.contains(target)) return;
+      if (!overlayRef.current?.contains(target)) return;
+      // Dropdown fields scroll themselves to leave room for their menu above the keyboard.
+      if (target.closest(".select-field")) return;
 
       const scrollable =
         target.closest<HTMLElement>("[data-modal-scroll]") ??
@@ -82,21 +89,21 @@ function useModalViewport(overlayRef: React.RefObject<HTMLElement | null>, activ
     }
 
     applyViewport();
-    vv.addEventListener("resize", applyViewport);
-    vv.addEventListener("scroll", applyViewport);
+    vv.addEventListener("resize", scheduleApply);
+    vv.addEventListener("scroll", scheduleApply, { passive: true });
     document.addEventListener("focusin", scrollFocusedIntoView);
 
     return () => {
-      vv.removeEventListener("resize", applyViewport);
-      vv.removeEventListener("scroll", applyViewport);
+      cancelAnimationFrame(frame);
+      vv.removeEventListener("resize", scheduleApply);
+      vv.removeEventListener("scroll", scheduleApply);
       document.removeEventListener("focusin", scrollFocusedIntoView);
-      const el = overlayRef.current;
-      if (!el) return;
-      el.style.top = "";
-      el.style.left = "";
-      el.style.width = "";
-      el.style.height = "";
-      el.style.removeProperty("--modal-visible-height");
+      if (!overlay) return;
+      overlay.style.top = "";
+      overlay.style.left = "";
+      overlay.style.width = "";
+      overlay.style.height = "";
+      overlay.style.removeProperty("--modal-visible-height");
     };
   }, [active, overlayRef]);
 }

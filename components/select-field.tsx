@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { computeMenuBox, trackMenuPlacement, type MenuBox } from "@/lib/floating-menu";
 
 export type SelectOption = {
   value: string;
@@ -85,12 +86,8 @@ export function SelectField({
     !multiple && autoSelectWhenSingle && options.length === 1 ? options[0] : null;
   const fieldValue = value || soleOption?.value || "";
   const [selectedMulti, setSelectedMulti] = useState<string[]>(valueMultiple);
-  const [box, setBox] = useState<{
-    top: number;
-    left: number;
-    width: number;
-    maxHeight: number;
-  } | null>(null);
+  const [box, setBox] = useState<MenuBox | null>(null);
+  const menuMaxHeight = menuExpanded ? 360 : 240;
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -170,35 +167,7 @@ export function SelectField({
   function placeMenu() {
     const rect = rootRef.current?.getBoundingClientRect();
     if (!rect) return;
-
-    const gap = 6;
-    const viewportPad = 8;
-    const preferredMax = menuExpanded ? 360 : 240;
-    const vv = window.visualViewport;
-    const viewportHeight = vv?.height ?? window.innerHeight;
-    const viewportTop = vv?.offsetTop ?? 0;
-    const spaceBelow = viewportHeight - (rect.bottom - viewportTop) - gap - viewportPad;
-    const spaceAbove = rect.top - viewportTop - gap - viewportPad;
-    const openUpward = spaceBelow < 160 && spaceAbove > spaceBelow;
-
-    if (openUpward) {
-      const maxHeight = Math.min(preferredMax, Math.max(80, spaceAbove));
-      setBox({
-        top: rect.top - gap - maxHeight,
-        left: rect.left,
-        width: rect.width,
-        maxHeight,
-      });
-      return;
-    }
-
-    const maxHeight = Math.min(preferredMax, Math.max(80, spaceBelow));
-    setBox({
-      top: rect.bottom + gap,
-      left: rect.left,
-      width: rect.width,
-      maxHeight,
-    });
+    setBox(computeMenuBox(rect, menuMaxHeight));
   }
 
   useLayoutEffect(() => {
@@ -219,15 +188,13 @@ export function SelectField({
       if (event.key === "Escape") closeMenu();
     }
 
+    const stopTracking = trackMenuPlacement(rootRef.current, menuMaxHeight, placeMenu);
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("keydown", onKeyDown);
-    window.addEventListener("resize", placeMenu);
-    window.addEventListener("scroll", placeMenu, true);
     return () => {
+      stopTracking();
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("resize", placeMenu);
-      window.removeEventListener("scroll", placeMenu, true);
     };
   }, [open, menuExpanded, menuFooter]);
 
