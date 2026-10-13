@@ -72,7 +72,7 @@ export function OverviewStageSummaryModal({
             </svg>
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto bg-[var(--page-bg,#f4f7fb)] p-4">
+        <div className="modal-body-scroll min-h-0 flex-1 bg-[var(--page-bg,#f4f7fb)] p-4" data-modal-scroll>
           <JourneySummaryCard
             journey={config.journey}
             truckRows={config.truckRows}

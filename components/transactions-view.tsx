@@ -873,12 +873,12 @@ function MobileFilterSheet({
 
   return (
     <ModalOverlay
-      className="z-[70] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto"
+      className="z-[70] bg-slate-900/60 backdrop-blur-sm sm:p-4"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="relative flex max-h-[min(90vh,740px)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-2xl transition-all"
+        className="relative flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-2xl transition-all max-h-[min(calc(var(--modal-visible-height,100dvh)-1.5rem),740px)]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="mobile-filters-title"
@@ -919,7 +919,7 @@ function MobileFilterSheet({
         </div>
 
         {/* Filter Body with Dropdowns for Each Filter */}
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4 pb-6">
+        <div className="modal-body-scroll min-h-0 flex-1 space-y-4 px-5 py-4 pb-6" data-modal-scroll>
           {/* 1. Transaction Flow */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
@@ -1376,12 +1376,12 @@ function NewTransactionModal({
 
   return (
     <ModalOverlay
-      className="z-[70] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto"
+      className="z-[70] bg-slate-900/60 backdrop-blur-sm sm:p-4"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="relative flex max-h-[min(90vh,740px)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-2xl transition-all"
+        className="relative flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-2xl transition-all max-h-[min(calc(var(--modal-visible-height,100dvh)-1.5rem),740px)]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="new-transaction-title"
@@ -1405,7 +1405,7 @@ function NewTransactionModal({
         </div>
         <form key={formKey} action={formAction} className="flex min-h-0 flex-1 flex-col">
           <input type="hidden" name="category_scope" value={categoryScope} />
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+          <div className="modal-body-scroll min-h-0 flex-1 space-y-4 p-5" data-modal-scroll>
             <div className="grid gap-4 sm:grid-cols-2">
               <FieldStack label="Date">
                 <DateField name="txn_date" required defaultValue={todayIsoDate()} />

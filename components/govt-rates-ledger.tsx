@@ -590,7 +590,7 @@ function AddGovtLedgerModal({
       aria-modal="true"
       aria-labelledby="add-govt-ledger-title"
     >
-      <div className="surface flex max-h-[min(90vh,640px)] w-full max-w-xl flex-col overflow-hidden shadow-2xl">
+      <div className="surface flex w-full max-w-xl flex-col overflow-hidden shadow-2xl max-h-[min(calc(var(--modal-visible-height,100dvh)-1.5rem),640px)]">
         <div className="flex items-center justify-between border-b border-line bg-blue-soft/30 px-5 py-4">
           <h2 id="add-govt-ledger-title" className="text-lg font-bold text-blue-dark">
             Configure FY
@@ -608,7 +608,7 @@ function AddGovtLedgerModal({
         </div>
 
         <form id={ledgerFormId} action={action} className="flex flex-1 flex-col overflow-hidden">
-          <div className="flex-1 space-y-4 overflow-y-auto p-5">
+          <div className="modal-body-scroll flex-1 space-y-4 p-5" data-modal-scroll>
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-widest text-muted">Financial year</label>
               <SelectField

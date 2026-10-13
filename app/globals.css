@@ -900,6 +900,7 @@ input[type="number"]::-webkit-inner-spin-button {
   min-width: 0;
   justify-self: end;
   align-self: end;
+  touch-action: manipulation;
 }
 
 .page-title {
@@ -942,8 +943,41 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .modal-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  padding: 0.75rem;
+  padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  touch-action: pan-y;
+}
+
+@media (min-width: 640px) {
+  .modal-overlay {
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+.modal-body-scroll,
+[data-modal-scroll] {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  max-height: calc(var(--modal-visible-height, 100dvh) - 7.5rem);
+  touch-action: pan-y;
+}
+
+@media (min-width: 640px) {
+  .modal-body-scroll,
+  [data-modal-scroll] {
+    max-height: min(90vh, calc(var(--modal-visible-height, 100dvh) - 5rem));
+  }
 }
 
 .mobile-tabbar {

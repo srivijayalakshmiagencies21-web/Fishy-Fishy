@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 export type SelectOption = {
@@ -174,8 +174,11 @@ export function SelectField({
     const gap = 6;
     const viewportPad = 8;
     const preferredMax = menuExpanded ? 360 : 240;
-    const spaceBelow = window.innerHeight - rect.bottom - gap - viewportPad;
-    const spaceAbove = rect.top - gap - viewportPad;
+    const vv = window.visualViewport;
+    const viewportHeight = vv?.height ?? window.innerHeight;
+    const viewportTop = vv?.offsetTop ?? 0;
+    const spaceBelow = viewportHeight - (rect.bottom - viewportTop) - gap - viewportPad;
+    const spaceAbove = rect.top - viewportTop - gap - viewportPad;
     const openUpward = spaceBelow < 160 && spaceAbove > spaceBelow;
 
     if (openUpward) {
@@ -198,10 +201,15 @@ export function SelectField({
     });
   }
 
+  useLayoutEffect(() => {
+    if (!open) return;
+    placeMenu();
+  }, [open, menuExpanded, menuFooter]);
+
   useEffect(() => {
     if (!open) return;
 
-    function onPointerDown(event: MouseEvent) {
+    function onPointerDown(event: PointerEvent) {
       const target = event.target as Node;
       if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
       closeMenu();
@@ -211,13 +219,12 @@ export function SelectField({
       if (event.key === "Escape") closeMenu();
     }
 
-    placeMenu();
-    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("keydown", onKeyDown);
     window.addEventListener("resize", placeMenu);
     window.addEventListener("scroll", placeMenu, true);
     return () => {
-      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", placeMenu);
       window.removeEventListener("scroll", placeMenu, true);
