@@ -876,37 +876,30 @@ input[type="number"]::-webkit-inner-spin-button {
 
 .page-header-row {
   --page-header-aside-width: 12.5rem;
-  /* Matches financial-year label + compact select (stable when FY mounts after title). */
   --page-header-row-min-height: 3.5rem;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--page-header-aside-width);
-  align-items: center;
-  gap: 0.75rem 1rem;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: end;
+  gap: 0.5rem 0.75rem;
   min-height: var(--page-header-row-min-height);
 }
 
-@media (max-width: 479px) {
-  .page-header-row {
-    grid-template-columns: 1fr;
-    align-items: start;
-  }
+.page-header-row:has(.page-header-aside--active) {
+  grid-template-columns: minmax(0, 1fr) var(--page-header-aside-width);
+}
 
-  .page-header-aside:not(:empty) {
-    justify-self: stretch;
+@media (max-width: 479px) {
+  .page-header-row:has(.page-header-aside--active) {
+    --page-header-aside-width: 9.25rem;
+    gap: 0.35rem 0.5rem;
   }
 }
 
 .page-header-aside {
   width: 100%;
   min-width: 0;
-  min-height: var(--page-header-row-min-height);
   justify-self: end;
-  align-self: center;
-}
-
-.page-header-aside:empty {
-  min-height: 0;
-  pointer-events: none;
+  align-self: end;
 }
 
 .page-title {
@@ -916,6 +909,13 @@ input[type="number"]::-webkit-inner-spin-button {
   font-weight: 650;
   letter-spacing: -0.02em;
   line-height: 1.25;
+}
+
+@media (max-width: 479px) {
+  .page-title {
+    font-size: 1.0625rem;
+    line-height: 1.2;
+  }
 }
 
 .canvas-body {

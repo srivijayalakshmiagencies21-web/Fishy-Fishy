@@ -1,16 +1,24 @@
 "use client";
 
-import { createContext, useContext, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
 type PageHeaderAsideContextValue = {
-  asideRef: React.MutableRefObject<ReactNode>;
+  aside: ReactNode;
+  setAside: (node: ReactNode) => void;
 };
 
 const PageHeaderAsideContext = createContext<PageHeaderAsideContextValue | null>(null);
 
 export function PageHeaderAsideProvider({ children }: { children: ReactNode }) {
-  const asideRef = useRef<ReactNode>(null);
-  const value = useMemo(() => ({ asideRef }), [asideRef]);
+  const [aside, setAside] = useState<ReactNode>(null);
+  const value = useMemo(() => ({ aside, setAside }), [aside]);
   return (
     <PageHeaderAsideContext.Provider value={value}>{children}</PageHeaderAsideContext.Provider>
   );
@@ -18,24 +26,19 @@ export function PageHeaderAsideProvider({ children }: { children: ReactNode }) {
 
 export function PageHeaderAsideSlot() {
   const ctx = useContext(PageHeaderAsideContext);
-  return <div className="page-header-aside">{ctx?.asideRef.current ?? null}</div>;
+  if (!ctx?.aside) return null;
+  return <div className="page-header-aside page-header-aside--active">{ctx.aside}</div>;
 }
 
-/** Registers `children` for the canvas page header (rendered beside the title). */
+/** Registers `children` in the canvas page header beside the title. */
 export function PageHeaderAside({ children }: { children: ReactNode }) {
-  const ctx = useContext(PageHeaderAsideContext);
-
-  if (ctx) {
-    ctx.asideRef.current = children;
-  }
+  const setAside = useContext(PageHeaderAsideContext)?.setAside;
 
   useLayoutEffect(() => {
-    if (!ctx) return;
-    ctx.asideRef.current = children;
-    return () => {
-      ctx.asideRef.current = null;
-    };
-  }, [children, ctx]);
+    if (!setAside) return;
+    setAside(children);
+    return () => setAside(null);
+  }, [children, setAside]);
 
   return null;
 }

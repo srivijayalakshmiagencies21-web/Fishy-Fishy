@@ -24,8 +24,10 @@ export function FinancialYearPicker({
   );
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-1">
-      <span className="text-[0.65rem] font-bold uppercase tracking-widest text-muted">Financial year</span>
+    <div className="flex w-full min-w-0 flex-col gap-0.5 sm:gap-1">
+      <span className="text-[0.58rem] font-bold uppercase leading-none tracking-wide text-muted sm:text-[0.65rem] sm:tracking-widest">
+        Financial year
+      </span>
       <SelectField
         compact
         placeholder={years.length === 0 ? "Configure FY in Govt rates" : "Select FY"}
