@@ -28,8 +28,8 @@ export function FloatingAddButton({
 }) {
   const bottomClass =
     mobileBottom === "tab"
-      ? "bottom-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom,0px)+0.75rem)]"
-      : "bottom-[calc(var(--bottom-nav-height)+env(safe-area-inset-bottom,0px)+4.75rem)]";
+      ? "bottom-[calc(var(--bottom-nav-height)+var(--tabbar-inset-bottom,0px)+0.75rem)]"
+      : "bottom-[calc(var(--bottom-nav-height)+var(--tabbar-inset-bottom,0px)+4.75rem)]";
 
   return (
     <BodyPortal>
