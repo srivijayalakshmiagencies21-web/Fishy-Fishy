@@ -1639,8 +1639,7 @@ export function FinalPointForm({
           </span>
         }
         optionsMenu={
-          normalizeJourneyPhase(journey.phase) !== JourneyPhase.Final &&
-          normalizeJourneyPhase(journey.phase) !== JourneyPhase.Closed ? undefined : (
+          normalizeJourneyPhase(journey.phase) !== JourneyPhase.Final ? undefined : (
             <div className="relative">
               <button
                 type="button"

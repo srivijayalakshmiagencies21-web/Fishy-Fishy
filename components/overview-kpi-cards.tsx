@@ -207,7 +207,7 @@ function KpiCardShell({
         interactive
           ? "cursor-pointer hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue"
           : ""
-      } ${selected ? `ring-2 ring-blue shadow-md ${style.ring}` : ""} ${style.border} ${className ?? ""}`}
+      } ${selected ? `ring-2 shadow-md ${style.ring}` : ""} ${style.border} ${className ?? ""}`}
     >
       {children}
     </div>

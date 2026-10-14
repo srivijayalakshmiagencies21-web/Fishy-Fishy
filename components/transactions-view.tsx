@@ -412,7 +412,7 @@ export function TransactionsView({
         {/* Mobile Filter & Sort Bar (md:hidden) */}
         <div className="flex items-center justify-between gap-1.5 border-b border-line bg-[var(--page)] p-2.5 md:hidden">
           {/* Sorting Badges */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar p-0.5">
             {([
               { key: "date", label: "Date" },
               { key: "amount", label: "Amt" },
@@ -426,7 +426,7 @@ export function TransactionsView({
                   onClick={() => toggleSort(opt.key)}
                   className={`flex h-8 shrink-0 items-center gap-1 rounded-full border px-2.5 text-xs transition-all cursor-pointer ${
                     isActive
-                      ? "border-[var(--brand)] bg-blue-soft text-blue-dark font-bold ring-1 ring-[var(--brand)]/30 shadow-xs"
+                      ? "border-[var(--brand)] bg-blue-soft text-blue-dark font-bold shadow-xs"
                       : "border-line bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium"
                   }`}
                   aria-pressed={isActive}
@@ -460,7 +460,7 @@ export function TransactionsView({
             onClick={() => setFilterSheetOpen(true)}
             className={`flex h-8 shrink-0 items-center gap-1.5 px-3 rounded-full border text-xs font-semibold transition-all shadow-xs ml-auto cursor-pointer ${
               secondaryFilterCount > 0
-                ? "border-[var(--brand)] bg-blue-soft text-blue-dark font-bold ring-1 ring-[var(--brand)]/30"
+                ? "border-[var(--brand)] bg-blue-soft text-blue-dark font-bold"
                 : "border-line bg-white text-slate-700 hover:bg-slate-50"
             }`}
           >

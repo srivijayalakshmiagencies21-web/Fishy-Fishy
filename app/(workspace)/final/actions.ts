@@ -118,6 +118,17 @@ export async function recordUnload(state: unknown, formData: FormData) {
     return { success: false, error: "Invalid submission." };
   }
 
+  const { data: journeyRow, error: journeyRowError } = await supabase
+    .from("journeys" as any)
+    .select("phase")
+    .eq("id", journeyId)
+    .maybeSingle();
+  if (journeyRowError) return { success: false, error: journeyRowError.message };
+  if (!journeyRow) return { success: false, error: "Journey not found." };
+  if (normalizeJourneyPhase(journeyRow.phase) === JourneyPhase.Closed) {
+    return { success: false, error: "This journey is closed and can no longer be changed." };
+  }
+
   const payload = JSON.parse(payloadStr) as {
     district_id?: number | null;
     trucks: Array<{
@@ -393,7 +404,10 @@ export async function deleteFinalUnloadRecording(journeyId: string) {
   if (!journey) return { success: false, error: "Journey not found." };
 
   const phase = normalizeJourneyPhase(journey.phase);
-  if (phase !== JourneyPhase.Final && phase !== JourneyPhase.Closed) {
+  if (phase === JourneyPhase.Closed) {
+    return { success: false, error: "This journey is closed and can no longer be changed." };
+  }
+  if (phase !== JourneyPhase.Final) {
     return { success: false, error: "Final unload has not started for this journey." };
   }
 
