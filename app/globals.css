@@ -87,6 +87,25 @@ html, body {
   }
 }
 
+/*
+ * Installed (home-screen) app: with a translucent status bar + viewport-fit=cover, iOS resolves
+ * `100%`, `dvh` and `svh` to the screen minus the status bar, leaving a blank strip under the
+ * tab bar. `vh` is the full screen there (no browser chrome to collapse).
+ */
+@media (display-mode: standalone) {
+  html,
+  body,
+  html.app-shell-active,
+  html.app-shell-active body {
+    height: 100vh;
+  }
+
+  .app-viewport {
+    height: 100vh;
+    max-height: 100vh;
+  }
+}
+
 body {
   margin: 0;
   background: transparent;
@@ -651,6 +670,7 @@ input[type="number"]::-webkit-inner-spin-button {
   position: sticky;
   top: 0;
   z-index: 30;
+  padding-top: env(safe-area-inset-top, 0px);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
