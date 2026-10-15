@@ -1061,6 +1061,19 @@ input[type="number"]::-webkit-inner-spin-button {
   display: none;
 }
 
+/*
+ * Android paints its gesture/nav bar below the page in the solid theme color (--brand).
+ * Fade the bar's bottom edge to that color so the horizontal gradient meets it seamlessly.
+ * iOS (the only engine with -webkit-touch-callout) draws the page to the screen edge instead.
+ */
+@supports not (-webkit-touch-callout: none) {
+  .mobile-tabbar {
+    background:
+      linear-gradient(180deg, transparent 45%, var(--brand) 100%),
+      linear-gradient(90deg, var(--brand) 0%, var(--brand-dark) 100%);
+  }
+}
+
 @media (min-width: 768px) {
   .mobile-tabbar { display: none; }
 }
