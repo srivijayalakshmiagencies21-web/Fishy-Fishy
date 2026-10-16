@@ -1,19 +1,17 @@
-/** Remembered landing page so the static launch screen at `/` can skip the server redirect hop. */
-export const LAUNCH_HOME_KEY = "fishy-fishy:home";
+export const LAUNCH_HOME_COOKIE = "ff-home";
+
+/** Only same-site absolute paths; anything else falls back to `/enter`, which resolves the role server-side. */
+export function safeLaunchHome(value: string | undefined) {
+  if (!value || value.charAt(0) !== "/" || value.charAt(1) === "/" || value.charAt(1) === "\\") {
+    return "/enter";
+  }
+  return value;
+}
 
 export function rememberLaunchHome(path: string) {
-  try {
-    localStorage.setItem(LAUNCH_HOME_KEY, path);
-  } catch {}
+  document.cookie = `${LAUNCH_HOME_COOKIE}=${encodeURIComponent(path)}; Path=/; Max-Age=31536000; SameSite=Lax`;
 }
 
 export function forgetLaunchHome() {
-  try {
-    localStorage.removeItem(LAUNCH_HOME_KEY);
-  } catch {}
+  document.cookie = `${LAUNCH_HOME_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`;
 }
-
-/** Runs inline before hydration; falls back to `/enter`, which resolves the role server-side. */
-export const launchRedirectScript = `(function(){var h;try{h=localStorage.getItem(${JSON.stringify(
-  LAUNCH_HOME_KEY,
-)})}catch(e){}if(!h||h.charAt(0)!=="/"||h.charAt(1)==="/")h="/enter";location.replace(h)})();`;
