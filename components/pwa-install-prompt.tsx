@@ -14,6 +14,28 @@ export function PwaInstallPrompt() {
   const [isStandalone, setIsStandalone] = useState(false);
   const [showIosGuide, setShowIosGuide] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [splashCleared, setSplashCleared] = useState(false);
+
+  // iOS Safari paints the blurred banner through the launch splash, so wait until it has faded out.
+  useEffect(() => {
+    const html = document.documentElement;
+    let timer: number | undefined;
+    const check = () => {
+      const state = html.getAttribute("data-splash");
+      if (state !== "done" && state !== "off") return false;
+      timer = window.setTimeout(() => setSplashCleared(true), state === "done" ? 450 : 0);
+      return true;
+    };
+    if (check()) return () => window.clearTimeout(timer);
+    const observer = new MutationObserver(() => {
+      if (check()) observer.disconnect();
+    });
+    observer.observe(html, { attributes: true, attributeFilter: ["data-splash"] });
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(timer);
+    };
+  }, []);
 
   useEffect(() => {
     // Detect standalone PWA mode
@@ -39,7 +61,7 @@ export function PwaInstallPrompt() {
     return () => window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
   }, []);
 
-  if (isStandalone || dismissed) return null;
+  if (isStandalone || dismissed || !splashCleared) return null;
   if (!deferredPrompt && !isIos) return null;
 
   const handleInstallClick = async () => {
