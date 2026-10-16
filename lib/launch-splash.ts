@@ -1,14 +1,10 @@
-import { LAUNCH_HOME_COOKIE } from "@/lib/launch-home";
 import { launchSplashLogo } from "@/lib/launch-splash-logo";
 
 /**
- * The launch splash is painted twice: first by the static `/` document (served from the CDN, so it
- * replaces the OS launch screen almost immediately), then by the root layout of the page it hands
- * off to. Both share this markup and CSS, and every animation is offset by the time since launch
- * (`--splash-elapsed`), so the second copy continues the first instead of restarting.
+ * Animated launch splash, rendered first in the root layout so it streams before the page data.
+ * CSS and logo are inline so it paints without waiting on any other request.
  */
-const SPLASH_START_KEY = "fishy-fishy:splash-start";
-const HANDOFF_WINDOW_MS = 15000;
+const SPLASH_SEEN_KEY = "fishy-fishy:splash";
 
 const mouthBubbles = [
   { size: "0.45rem", delay: "0.1s" },
@@ -41,7 +37,7 @@ const fishSvg =
   "</svg>";
 
 export const launchSplashInnerHtml = [
-  '<div class="launch-splash-ambient">',
+  '<div class="launch-splash-scene">',
   ...risingBubbles.map(
     (b) =>
       `<span class="launch-splash-rising-bubble" style="--left:${b.left};--size:${b.size};--duration:${b.duration};--delay:${b.delay}"></span>`,
@@ -50,43 +46,44 @@ export const launchSplashInnerHtml = [
     (f) =>
       `<span class="launch-splash-swimmer${f.reverse ? " launch-splash-swimmer--reverse" : ""}" style="--top:${f.top};--size:${f.size};--duration:${f.duration};--delay:${f.delay}">${fishSvg}</span>`,
   ),
-  "</div>",
   '<div class="launch-splash-logo-wrap"><span class="launch-splash-logo"></span>',
   ...mouthBubbles.map(
     (b) => `<span class="launch-splash-bubble" style="--size:${b.size};--delay:${b.delay}"></span>`,
   ),
   "</div>",
   '<p class="launch-splash-name">Fishy-Fishy</p>',
+  "</div>",
 ].join("");
 
 export const launchSplashCss = `
 .launch-splash {
-  --since: var(--splash-elapsed, 0ms);
   position: fixed;
   inset: 0;
   z-index: 1000;
   overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   background: #0f4c81;
   color: #fff;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  animation: launch-splash-out 0.4s ease-in calc(10s - var(--since)) forwards;
+  animation: launch-splash-out 0.4s ease-in 10s forwards;
 }
 html[data-splash="done"] .launch-splash { animation: launch-splash-done 0.4s ease-in forwards; }
 html[data-splash="off"] .launch-splash { display: none; }
-.launch-splash-ambient {
+/* Starts as plain blue (matching the OS launch screen) and fades the animation in. */
+.launch-splash-scene {
   position: absolute;
   inset: 0;
-  animation: launch-splash-ambient-in 0.6s ease-out calc(0s - var(--since)) both;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  animation: launch-splash-scene-in 0.45s ease-out 0s both;
 }
-/* Same size and centring as the fish on the OS launch screens (scripts/generate-launch-splash.mjs). */
 .launch-splash-logo-wrap {
   position: relative;
-  width: 8rem;
+  width: min(9.5rem, 42vw);
   aspect-ratio: 422 / 260;
-  animation: launch-splash-swim 2.4s ease-in-out calc(0s - var(--since)) infinite;
+  animation: launch-splash-swim 2.4s ease-in-out 0s infinite;
 }
 .launch-splash-logo {
   display: block;
@@ -103,7 +100,7 @@ html[data-splash="off"] .launch-splash { display: none; }
   border: 1px solid rgba(255, 255, 255, 0.7);
   border-radius: 999px;
   opacity: 0;
-  animation: launch-splash-bubble 1.4s ease-out calc(var(--delay) - var(--since)) infinite;
+  animation: launch-splash-bubble 1.4s ease-out var(--delay) infinite;
 }
 .launch-splash-rising-bubble {
   position: absolute;
@@ -114,7 +111,7 @@ html[data-splash="off"] .launch-splash { display: none; }
   border: 1px solid #fff;
   border-radius: 999px;
   opacity: 0.18;
-  animation: launch-splash-rise var(--duration) linear calc(var(--delay) - var(--since)) infinite;
+  animation: launch-splash-rise var(--duration) linear var(--delay) infinite;
 }
 .launch-splash-swimmer {
   position: absolute;
@@ -122,21 +119,16 @@ html[data-splash="off"] .launch-splash { display: none; }
   left: 0;
   width: var(--size);
   opacity: 0.16;
-  animation: launch-splash-drift-right var(--duration) linear calc(var(--delay) - var(--since)) infinite;
+  animation: launch-splash-drift-right var(--duration) linear var(--delay) infinite;
 }
 .launch-splash-swimmer--reverse { animation-name: launch-splash-drift-left; }
 .launch-splash-swimmer svg { display: block; width: 100%; overflow: visible; }
 .launch-splash-swimmer--reverse svg { scale: -1 1; }
 .launch-splash-tail {
   transform-origin: 15px 16px;
-  animation: launch-splash-tail 0.6s ease-in-out calc(0s - var(--since)) infinite alternate;
+  animation: launch-splash-tail 0.6s ease-in-out 0s infinite alternate;
 }
 .launch-splash-name {
-  position: absolute;
-  top: calc(50% + 4rem);
-  left: 0;
-  right: 0;
-  text-align: center;
   margin: 0;
   font-size: 0.8rem;
   line-height: 1.2rem;
@@ -144,9 +136,9 @@ html[data-splash="off"] .launch-splash { display: none; }
   letter-spacing: 0.24em;
   text-transform: uppercase;
   opacity: 0;
-  animation: launch-splash-name-in 0.6s ease-out calc(0.25s - var(--since)) forwards;
+  animation: launch-splash-name-in 0.6s ease-out 0.25s forwards;
 }
-@keyframes launch-splash-ambient-in { from { opacity: 0; } }
+@keyframes launch-splash-scene-in { from { opacity: 0; } }
 @keyframes launch-splash-out { to { opacity: 0; visibility: hidden; } }
 @keyframes launch-splash-done { to { opacity: 0; visibility: hidden; } }
 @keyframes launch-splash-swim {
@@ -183,18 +175,10 @@ html[data-splash="off"] .launch-splash { display: none; }
 `;
 
 /**
- * Root layout copy. Continues a splash started by `/` (or starts one on a direct cold load), skips
- * it on later loads in the session, and fades it once it has played a minimum time and the page
- * has streamed in (`app/loading.tsx` removes its `data-launch-pending` marker).
+ * Runs while the HTML is parsed: skips the splash on later loads in the session, otherwise fades it
+ * once it has played a minimum time and the page has streamed in (`app/loading.tsx` removes its
+ * `data-launch-pending` marker).
  */
-export const launchSplashLayoutScript = `(function(){var d=document.documentElement,k=${JSON.stringify(
-  SPLASH_START_KEY,
-)},now=Date.now(),s=0;try{s=+sessionStorage.getItem(k)||0}catch(e){}if(s&&now-s>${HANDOFF_WINDOW_MS}){d.setAttribute("data-splash","off");return}if(!s){s=now;try{sessionStorage.setItem(k,String(s))}catch(e){}}d.style.setProperty("--splash-elapsed",(now-s)+"ms");var min=matchMedia("(prefers-reduced-motion: reduce)").matches?600:1400,timer=setInterval(function(){if(Date.now()-s<min||document.querySelector("[data-launch-pending]"))return;clearInterval(timer);d.setAttribute("data-splash","done")},50)})();`;
-
-/**
- * Static `/` copy. Starts the splash clock, then (after the first frame is painted) replaces itself
- * with the remembered home page; `/enter` resolves the role server-side when there is none.
- */
-export const launchSplashStartScript = `(function(){try{sessionStorage.setItem(${JSON.stringify(
-  SPLASH_START_KEY,
-)},String(Date.now()))}catch(e){}var m=document.cookie.match(/(?:^|; )${LAUNCH_HOME_COOKIE}=([^;]*)/),h="/enter";if(m){try{h=decodeURIComponent(m[1])}catch(e){}}if(h.charAt(0)!=="/"||h.charAt(1)==="/"||h.charAt(1)==="\\\\")h="/enter";requestAnimationFrame(function(){setTimeout(function(){location.replace(h)},0)})})();`;
+export const launchSplashScript = `(function(){var d=document.documentElement,k=${JSON.stringify(
+  SPLASH_SEEN_KEY,
+)};try{if(sessionStorage.getItem(k)){d.setAttribute("data-splash","off");return}sessionStorage.setItem(k,"1")}catch(e){}var min=matchMedia("(prefers-reduced-motion: reduce)").matches?600:1400,t0=Date.now(),timer=setInterval(function(){if(Date.now()-t0<min||document.querySelector("[data-launch-pending]"))return;clearInterval(timer);d.setAttribute("data-splash","done")},50)})();`;

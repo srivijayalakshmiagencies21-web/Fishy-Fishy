@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { landingPath } from "@/lib/access";
+import { LAUNCH_HOME_COOKIE, safeLaunchHome } from "@/lib/launch-home";
+
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -48,6 +50,11 @@ export async function proxy(request: NextRequest) {
     return withSession(supabaseResponse, redirectTo(request, "/login"));
   }
 
+  if (signedIn && pathname === "/") {
+    const home = safeLaunchHome(request.cookies.get(LAUNCH_HOME_COOKIE)?.value);
+    return withSession(supabaseResponse, redirectTo(request, home));
+  }
+
   if (signedIn && pathname === "/login") {
     const { data: access, error: accessError } = await supabase.rpc("get_my_access");
     const home = !accessError && access?.[0] ? landingPath(access[0].pages ?? []) : "/enter";
@@ -80,8 +87,7 @@ function withSession(from: NextResponse, to: NextResponse) {
 }
 
 export const config = {
-  // `.+` leaves `/` (the static launch splash) out so it is served straight from the CDN.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|json)$).+)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|json)$).*)",
   ],
 };
