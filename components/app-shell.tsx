@@ -8,7 +8,8 @@ import { prefetchMasters } from "@/components/master-cache";
 import { useNavIntent } from "@/components/nav-intent";
 import { PageHeaderFinancialYear } from "@/components/page-header-financial-year";
 import { PageHeaderAsideProvider, PageHeaderAsideSlot } from "@/components/page-header-aside";
-import { appPages } from "@/lib/access";
+import { appPages, landingPath } from "@/lib/access";
+import { forgetLaunchHome, rememberLaunchHome } from "@/lib/launch-home";
 import type { FinancialYear } from "@/lib/financial-year";
 import { showsFinancialYearInHeader } from "@/lib/financial-year-header";
 import { masterLinks } from "@/lib/master-links";
@@ -80,6 +81,10 @@ export function AppShell({
   useEffect(() => {
     document.documentElement.style.setProperty("--sidebar-width", collapsed ? "5.25rem" : "16rem");
   }, [collapsed]);
+
+  useEffect(() => {
+    rememberLaunchHome(landingPath(pages));
+  }, [pages]);
 
   useEffect(() => {
     document.documentElement.classList.add("app-shell-active");
@@ -172,6 +177,7 @@ export function AppShell({
   }, []);
 
   async function onSignOut() {
+    forgetLaunchHome();
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/login");

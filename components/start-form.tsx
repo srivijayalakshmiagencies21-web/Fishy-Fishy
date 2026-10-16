@@ -574,28 +574,36 @@ export function StartPointForm({
   if (viewState === 'list') {
     return (
       <div className="mx-auto max-w-4xl space-y-6 pb-12">
-        <JourneyPointLaneSwitcher
-          value={laneView}
-          onChange={setLaneView}
-          inProgressCount={inProgressJourneys.length}
-          closedCount={closedJourneys.length}
-        />
+        {activeJourneys.length === 0 ? (
+          <section className="surface data-card">
+            <p className="px-4 py-8 text-sm text-[var(--text-secondary)]">No journeys on start point yet.</p>
+          </section>
+        ) : (
+          <>
+            <JourneyPointLaneSwitcher
+              value={laneView}
+              onChange={setLaneView}
+              inProgressCount={inProgressJourneys.length}
+              closedCount={closedJourneys.length}
+            />
 
-        <JourneyPointLaneSection title="In progress" hidden={!laneViewShowsInProgress(laneView)}>
-          {inProgressJourneys.length === 0 ? (
-            <p className="text-sm text-[var(--text-secondary)]">No journeys in progress.</p>
-          ) : (
-            inProgressJourneys.map((journey) => renderStartJourneyCard(journey, false))
-          )}
-        </JourneyPointLaneSection>
+            <JourneyPointLaneSection title="In progress" hidden={!laneViewShowsInProgress(laneView)}>
+              {inProgressJourneys.length === 0 ? (
+                <p className="text-sm text-[var(--text-secondary)]">No journeys in progress.</p>
+              ) : (
+                inProgressJourneys.map((journey) => renderStartJourneyCard(journey, false))
+              )}
+            </JourneyPointLaneSection>
 
-        <JourneyPointLaneSection title="Closed" hidden={!laneViewShowsClosed(laneView)}>
-          {closedJourneys.length === 0 ? (
-            <p className="text-sm text-[var(--text-secondary)]">No closed journeys yet.</p>
-          ) : (
-            closedJourneys.map((journey) => renderStartJourneyCard(journey, true))
-          )}
-        </JourneyPointLaneSection>
+            <JourneyPointLaneSection title="Closed" hidden={!laneViewShowsClosed(laneView)}>
+              {closedJourneys.length === 0 ? (
+                <p className="text-sm text-[var(--text-secondary)]">No closed journeys yet.</p>
+              ) : (
+                closedJourneys.map((journey) => renderStartJourneyCard(journey, true))
+              )}
+            </JourneyPointLaneSection>
+          </>
+        )}
 
         {deleteJourneyId && (
           <ModalOverlay className="z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">

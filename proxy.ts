@@ -49,8 +49,7 @@ export async function proxy(request: NextRequest) {
     return withSession(supabaseResponse, redirectTo(request, "/login"));
   }
 
-  const isLogin = pathname === "/login";
-  if (signedIn && (isLogin || pathname === "/")) {
+  if (signedIn && pathname === "/login") {
     const { data: access, error: accessError } = await supabase.rpc("get_my_access");
     const home = !accessError && access?.[0] ? landingPath(access[0].pages ?? []) : "/enter";
     return withSession(supabaseResponse, redirectTo(request, home));
@@ -82,7 +81,8 @@ function withSession(from: NextResponse, to: NextResponse) {
 }
 
 export const config = {
+  // `.+` leaves `/` (the static PWA launch screen) out of the proxy so it is served from the CDN.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|json)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|json)$).+)",
   ],
 };
