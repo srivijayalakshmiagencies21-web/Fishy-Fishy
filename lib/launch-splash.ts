@@ -41,6 +41,7 @@ const fishSvg =
   "</svg>";
 
 export const launchSplashInnerHtml = [
+  '<div class="launch-splash-ambient">',
   ...risingBubbles.map(
     (b) =>
       `<span class="launch-splash-rising-bubble" style="--left:${b.left};--size:${b.size};--duration:${b.duration};--delay:${b.delay}"></span>`,
@@ -49,6 +50,7 @@ export const launchSplashInnerHtml = [
     (f) =>
       `<span class="launch-splash-swimmer${f.reverse ? " launch-splash-swimmer--reverse" : ""}" style="--top:${f.top};--size:${f.size};--duration:${f.duration};--delay:${f.delay}">${fishSvg}</span>`,
   ),
+  "</div>",
   '<div class="launch-splash-logo-wrap"><span class="launch-splash-logo"></span>',
   ...mouthBubbles.map(
     (b) => `<span class="launch-splash-bubble" style="--size:${b.size};--delay:${b.delay}"></span>`,
@@ -65,10 +67,8 @@ export const launchSplashCss = `
   z-index: 1000;
   overflow: hidden;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1.5rem;
   background: #0f4c81;
   color: #fff;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -76,9 +76,15 @@ export const launchSplashCss = `
 }
 html[data-splash="done"] .launch-splash { animation: launch-splash-done 0.4s ease-in forwards; }
 html[data-splash="off"] .launch-splash { display: none; }
+.launch-splash-ambient {
+  position: absolute;
+  inset: 0;
+  animation: launch-splash-ambient-in 0.6s ease-out calc(0s - var(--since)) both;
+}
+/* Same size and centring as the fish on the OS launch screens (scripts/generate-launch-splash.mjs). */
 .launch-splash-logo-wrap {
   position: relative;
-  width: min(9.5rem, 42vw);
+  width: 8rem;
   aspect-ratio: 422 / 260;
   animation: launch-splash-swim 2.4s ease-in-out calc(0s - var(--since)) infinite;
 }
@@ -126,6 +132,11 @@ html[data-splash="off"] .launch-splash { display: none; }
   animation: launch-splash-tail 0.6s ease-in-out calc(0s - var(--since)) infinite alternate;
 }
 .launch-splash-name {
+  position: absolute;
+  top: calc(50% + 4rem);
+  left: 0;
+  right: 0;
+  text-align: center;
   margin: 0;
   font-size: 0.8rem;
   line-height: 1.2rem;
@@ -135,6 +146,7 @@ html[data-splash="off"] .launch-splash { display: none; }
   opacity: 0;
   animation: launch-splash-name-in 0.6s ease-out calc(0.25s - var(--since)) forwards;
 }
+@keyframes launch-splash-ambient-in { from { opacity: 0; } }
 @keyframes launch-splash-out { to { opacity: 0; visibility: hidden; } }
 @keyframes launch-splash-done { to { opacity: 0; visibility: hidden; } }
 @keyframes launch-splash-swim {
