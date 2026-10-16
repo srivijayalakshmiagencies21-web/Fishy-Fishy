@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Source_Sans_3 } from "next/font/google";
+import { LaunchSplash } from "@/components/launch-splash";
 import { WaveField } from "@/components/wave-field";
+import iosSplashScreens from "@/lib/ios-splash-screens.json";
 import { ServiceWorkerRegister } from "@/components/sw-register";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import "./globals.css";
@@ -21,6 +23,10 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "Fishy-Fishy",
+    startupImage: iosSplashScreens.map(({ width, height, ratio }) => ({
+      url: `/splash/ios-${width}x${height}@${ratio}x.png`,
+      media: `(device-width: ${width}px) and (device-height: ${height}px) and (-webkit-device-pixel-ratio: ${ratio}) and (orientation: portrait)`,
+    })),
   },
   other: {
     "mobile-web-app-capable": "yes",
@@ -44,8 +50,9 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${sourceSans.variable} h-full antialiased`}>
+    <html lang="en" className={`${sourceSans.variable} h-full antialiased`} suppressHydrationWarning>
       <body className="min-h-full">
+        <LaunchSplash />
         <ServiceWorkerRegister />
         <WaveField />
         {children}
