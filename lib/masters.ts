@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getSessionUser } from "@/lib/session";
+import { getSessionUser, type SessionUser } from "@/lib/session";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -94,6 +94,7 @@ function usernameFromEmail(email: string | null | undefined) {
 
 export async function loadAccountLinkUsers(
   supabase: SupabaseServerClient,
+  sessionUser?: SessionUser | null,
 ): Promise<{ users: LinkUserOption[]; userLoadError: string | null }> {
   const linkResult = await supabase.rpc("list_account_link_users");
   if (!linkResult.error && (linkResult.data?.length ?? 0) > 0) {
@@ -106,7 +107,7 @@ export async function loadAccountLinkUsers(
     };
   }
 
-  const session = await getSessionUser();
+  const session = sessionUser === undefined ? await getSessionUser() : sessionUser;
   const canUseDirectory =
     session?.role === "Admin" ||
     session?.role === "Manager" ||

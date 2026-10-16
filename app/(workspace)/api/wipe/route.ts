@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { invalidateJourneyCaches } from "@/lib/cache-tags.server";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET() {
@@ -20,5 +21,6 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  invalidateJourneyCaches();
   return NextResponse.json({ success: true, deleted: data.length });
 }

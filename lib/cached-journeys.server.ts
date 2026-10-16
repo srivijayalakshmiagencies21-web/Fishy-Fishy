@@ -19,6 +19,7 @@ import {
 } from "@/lib/overview-journey-meta";
 import type { OverviewJourneyRow } from "@/lib/overview-types";
 import { createClient } from "@/lib/supabase/server";
+import { noSkipCache, workspaceCache, type SkipCache } from "@/lib/workspace-cache.server";
 
 export type { OverviewJourneyRow } from "@/lib/overview-types";
 
@@ -143,6 +144,7 @@ async function loadStartJourneysRaw(supabase: SupabaseServerClient) {
 async function fetchJourneyCardRows(
   supabase: SupabaseServerClient,
   options?: { phases?: string[]; withStartItems?: boolean },
+  skipCache: SkipCache = noSkipCache,
 ) {
   const select = options?.withStartItems ? JOURNEY_CARD_SELECT_WITH_START_ITEMS : JOURNEY_CARD_SELECT;
   const fallbackSelect = options?.withStartItems
@@ -167,6 +169,7 @@ async function fetchJourneyCardRows(
     ({ data, error } = await fallbackQuery);
     if (error) {
       console.error("[journeys] card fallback fetch failed:", error.message);
+      skipCache();
       return [];
     }
   }
@@ -178,8 +181,11 @@ async function loadJourneySummariesRaw(supabase: SupabaseServerClient, phases: s
   return journeys.length > 0 ? mapJourneySummaries(journeys) : [];
 }
 
-async function loadOverviewJourneysRaw(supabase: SupabaseServerClient): Promise<OverviewJourneyRow[]> {
-  const journeys = await fetchJourneyCardRows(supabase, { withStartItems: true });
+async function loadOverviewJourneysRaw(
+  supabase: SupabaseServerClient,
+  skipCache: SkipCache,
+): Promise<OverviewJourneyRow[]> {
+  const journeys = await fetchJourneyCardRows(supabase, { withStartItems: true }, skipCache);
   if (journeys.length === 0) return [];
 
   const rows: OverviewJourneyRow[] = mapJourneySummaries(journeys).map((summary) => {
@@ -226,8 +232,7 @@ export function loadFinalJourneys(userId: string): Promise<JourneySummary[]> {
   );
 }
 
-/** Overview always loads fresh (no unstable_cache) so auth + schema changes are not masked. */
-export async function loadOverviewJourneys(_userId: string): Promise<OverviewJourneyRow[]> {
-  const supabase = await createClient();
-  return loadOverviewJourneysRaw(supabase);
+/** Per-deploy workspace cache, so schema changes in a new build are never masked. */
+export function loadOverviewJourneys(userId: string): Promise<OverviewJourneyRow[]> {
+  return workspaceCache("overview-journeys", userId, loadOverviewJourneysRaw);
 }

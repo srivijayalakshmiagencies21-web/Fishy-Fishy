@@ -15,11 +15,11 @@ export default async function VendorGovtRatesPage() {
 
   const [{ rows, initialRateTexts, error }, financialYears, headerYears, districtsMaster, govtLedgerRows] =
     await Promise.all([
-      loadJourneyRatesData(),
+      loadJourneyRatesData(user.id),
       loadFinancialYears(),
-      loadFinancialYearsFromGovtLedger(),
+      loadFinancialYearsFromGovtLedger(user.id),
       loadMasterCached("districts"),
-      loadGovtRateLedger(),
+      loadGovtRateLedger(user.id),
     ]);
 
   // Same FY the header picker shows (resolved from the govt-ledger FY list, like the layout).

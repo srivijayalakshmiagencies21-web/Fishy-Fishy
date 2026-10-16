@@ -1,6 +1,7 @@
 "use server";
 
 import {
+  revalidateFinancialYearSelection,
   revalidateFinancialYearViews,
   setSelectedFinancialYearCookie,
 } from "@/lib/revalidate-financial-year.server";
@@ -19,7 +20,7 @@ export async function selectFinancialYear(financialYearId: number): Promise<{ er
   }
 
   await setSelectedFinancialYearCookie(financialYearId);
-  revalidateFinancialYearViews();
+  revalidateFinancialYearSelection();
   return {};
 }
 

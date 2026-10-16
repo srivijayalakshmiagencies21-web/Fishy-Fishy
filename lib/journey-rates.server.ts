@@ -15,7 +15,7 @@ import {
   type JourneyRateSupplierLine,
   type JourneyRateTransporterLine,
 } from "@/lib/journey-rates";
-import { createClient } from "@/lib/supabase/server";
+import { noSkipCache, workspaceCache, type ServerSupabase, type SkipCache } from "@/lib/workspace-cache.server";
 
 const JOURNEY_RATES_TRUCK_FIELDS = `
      start_odometer_reading,
@@ -70,7 +70,7 @@ const JOURNEY_RATES_SELECT = `
   )
 `;
 
-async function fetchClosedJourneys(supabase: Awaited<ReturnType<typeof createClient>>): Promise<JourneySummary[]> {
+async function fetchClosedJourneys(supabase: ServerSupabase, skipCache: SkipCache): Promise<JourneySummary[]> {
   const fallbackSelect = JOURNEY_CARD_SELECT_FALLBACK_WITH_START_ITEMS.replace(
     "transporter:transporter_id(name)",
     "transporter:transporter_id(name, transporter_scope)",
@@ -91,6 +91,7 @@ async function fetchClosedJourneys(supabase: Awaited<ReturnType<typeof createCli
       .order("created_at", { ascending: true }));
     if (error) {
       console.error("[journey-rates] fallback fetch failed:", error.message);
+      skipCache();
       return [];
     }
   }
@@ -98,7 +99,7 @@ async function fetchClosedJourneys(supabase: Awaited<ReturnType<typeof createCli
   return mapJourneySummaries((data ?? []) as any[]).filter((row) => isClosedJourney(row.phase));
 }
 
-async function loadRateLinesByJourney(supabase: Awaited<ReturnType<typeof createClient>>) {
+async function loadRateLinesByJourney(supabase: ServerSupabase, skipCache: SkipCache) {
   const map = new Map<string, Map<string, number | null>>();
 
   const { data, error } = await (supabase as any)
@@ -107,6 +108,7 @@ async function loadRateLinesByJourney(supabase: Awaited<ReturnType<typeof create
 
   if (error) {
     console.error("[journey-rates] could not load saved rates:", error.message);
+    skipCache();
     return map;
   }
 
@@ -137,8 +139,9 @@ function applySavedRates(record: JourneyRateRecord, byLine: Map<string, number |
   };
 }
 
-async function journeyNumberById(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const { data } = await supabase.from("journeys").select("id").order("created_at", { ascending: true });
+async function journeyNumberById(supabase: ServerSupabase, skipCache: SkipCache) {
+  const { data, error } = await supabase.from("journeys").select("id").order("created_at", { ascending: true });
+  if (error) skipCache();
   const map = new Map<string, number>();
   for (const [index, row] of (data ?? []).entries()) {
     map.set(row.id, index + 1);
@@ -161,17 +164,25 @@ function buildRateTextMap(
   return map;
 }
 
-export async function loadJourneyRatesData(): Promise<{
+export type JourneyRatesData = {
   rows: JourneyRateRecord[];
   initialRateTexts: Record<string, string>;
   error: string | null;
-}> {
+};
+
+export function loadJourneyRatesData(userId: string): Promise<JourneyRatesData> {
+  return workspaceCache("journey-rates", userId, fetchJourneyRatesData);
+}
+
+export async function fetchJourneyRatesData(
+  supabase: ServerSupabase,
+  skipCache: SkipCache = noSkipCache,
+): Promise<JourneyRatesData> {
   try {
-    const supabase = await createClient();
     const [summaries, numbers, ratesByJourney] = await Promise.all([
-      fetchClosedJourneys(supabase),
-      journeyNumberById(supabase),
-      loadRateLinesByJourney(supabase),
+      fetchClosedJourneys(supabase, skipCache),
+      journeyNumberById(supabase, skipCache),
+      loadRateLinesByJourney(supabase, skipCache),
     ]);
     const ordered = [...summaries].sort((a, b) => {
       const aTime = a.finalTime ? Date.parse(a.finalTime) : (a.startTime ? Date.parse(a.startTime) : 0);
@@ -186,6 +197,7 @@ export async function loadJourneyRatesData(): Promise<{
     });
     return { rows, initialRateTexts: buildRateTextMap(rows, ratesByJourney), error: null };
   } catch (err) {
+    skipCache();
     return {
       rows: [],
       initialRateTexts: {},

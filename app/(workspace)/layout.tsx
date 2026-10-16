@@ -18,7 +18,7 @@ export default async function WorkspaceLayout({
     redirect("/login");
   }
 
-  const financialYears = await loadFinancialYearsFromGovtLedger();
+  const financialYears = await loadFinancialYearsFromGovtLedger(user.id);
   const selectedFinancialYearId = await resolveSelectedFinancialYearId(financialYears);
 
   return (

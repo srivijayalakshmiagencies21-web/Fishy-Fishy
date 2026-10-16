@@ -12,17 +12,19 @@ export default async function TimelinePage() {
   if (!user) redirect("/login");
   if (!user.pages.includes("timeline")) redirect(landingPath(user.pages));
 
-  const financialYears = await loadFinancialYearsFromGovtLedger();
+  const [financialYears, allJourneys, govtLedgerRows] = await Promise.all([
+    loadFinancialYearsFromGovtLedger(user.id),
+    loadOverviewJourneys(user.id),
+    loadGovtRateLedger(user.id),
+  ]);
   const selectedYearId = await resolveSelectedFinancialYearId(financialYears);
   const selectedYear =
     selectedYearId != null ? financialYears.find((year) => year.id === selectedYearId) ?? null : null;
 
-  const allJourneys = await loadOverviewJourneys(user.id);
   const journeys =
     selectedYear != null
       ? allJourneys.filter((journey) => overviewJourneyInFinancialYear(journey, selectedYear))
       : allJourneys;
-  const govtLedgerRows = await loadGovtRateLedger();
   const govtRowsForYear =
     selectedYearId != null
       ? govtLedgerRows.filter((row) => row.financialYearId === selectedYearId)

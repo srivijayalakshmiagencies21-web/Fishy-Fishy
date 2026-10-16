@@ -3,12 +3,24 @@ import "server-only";
 import { cache } from "react";
 import { mapFinancialYearRow, type FinancialYear } from "@/lib/financial-year";
 import type { GovtRateLedgerRow } from "@/lib/govt-rates";
-import { createClient } from "@/lib/supabase/server";
+import { noSkipCache, workspaceCache, type ServerSupabase, type SkipCache } from "@/lib/workspace-cache.server";
 
 export type { GovtRateLedgerRow } from "@/lib/govt-rates";
 
-export async function loadGovtRateLedger(): Promise<GovtRateLedgerRow[]> {
-  const supabase = await createClient();
+export const loadGovtRateLedger = cache(
+  (userId: string): Promise<GovtRateLedgerRow[]> => workspaceCache("govt-rate-ledger", userId, fetchGovtRateLedger),
+);
+
+/** Financial years that have at least one govt rate ledger row (Configure FY on Vendor & Govt Rates). */
+export const loadFinancialYearsFromGovtLedger = cache(
+  (userId: string): Promise<FinancialYear[]> =>
+    workspaceCache("govt-ledger-financial-years", userId, fetchFinancialYearsFromGovtLedger),
+);
+
+export async function fetchGovtRateLedger(
+  supabase: ServerSupabase,
+  skipCache: SkipCache = noSkipCache,
+): Promise<GovtRateLedgerRow[]> {
   const { data, error } = await (supabase as any)
     .from("govt_rate_ledger")
     .select(
@@ -31,6 +43,7 @@ export async function loadGovtRateLedger(): Promise<GovtRateLedgerRow[]> {
 
   if (error) {
     console.error("[govt-rates] load ledger failed:", error.message);
+    skipCache();
     return [];
   }
 
@@ -54,9 +67,10 @@ export async function loadGovtRateLedger(): Promise<GovtRateLedgerRow[]> {
   });
 }
 
-/** Financial years that have at least one govt rate ledger row (Configure FY on Vendor & Govt Rates). */
-export const loadFinancialYearsFromGovtLedger = cache(async (): Promise<FinancialYear[]> => {
-  const supabase = await createClient();
+async function fetchFinancialYearsFromGovtLedger(
+  supabase: ServerSupabase,
+  skipCache: SkipCache,
+): Promise<FinancialYear[]> {
   const { data, error } = await (supabase as any)
     .from("govt_rate_ledger")
     .select(
@@ -68,6 +82,7 @@ export const loadFinancialYearsFromGovtLedger = cache(async (): Promise<Financia
 
   if (error) {
     console.error("[govt-rates] load FY list failed:", error.message);
+    skipCache();
     return [];
   }
 
@@ -79,4 +94,4 @@ export const loadFinancialYearsFromGovtLedger = cache(async (): Promise<Financia
   }
 
   return [...byId.values()].sort((a, b) => a.startDate.localeCompare(b.startDate));
-});
+}

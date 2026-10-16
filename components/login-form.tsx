@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { landingPath } from "@/lib/access";
 import { accountEmail } from "@/lib/account-email";
 import { createClient } from "@/lib/supabase/client";
 
@@ -41,8 +42,11 @@ export function LoginForm() {
       return;
     }
 
+    const { data: access, error: accessError } = await supabase.rpc("get_my_access");
+    const home = !accessError && access?.[0] ? landingPath(access[0].pages ?? []) : "/enter";
+
     // Full navigation so auth cookies and server components match (soft router nav can show a blank shell).
-    window.location.assign("/enter");
+    window.location.assign(home);
   }
 
   return (

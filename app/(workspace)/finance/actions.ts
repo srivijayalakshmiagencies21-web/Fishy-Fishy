@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { invalidateWorkspaceData } from "@/lib/cache-tags.server";
 import { readableError } from "@/lib/masters";
 import { loadFinanceCategories, type FinanceCategoryScope } from "@/lib/transactions.server";
 import { getSessionUser } from "@/lib/session";
@@ -298,6 +299,7 @@ export async function createTransaction(_state: FormState, formData: FormData): 
 
   if (error) return fail(error.message);
 
+  invalidateWorkspaceData();
   revalidatePath("/finance-manager");
   revalidatePath("/finance-executive");
   return null;
@@ -329,6 +331,7 @@ export async function deleteTransaction(formData: FormData) {
   }
 
   await supabase.from("transactions").delete().eq("id", id);
+  invalidateWorkspaceData();
   revalidatePath("/finance-manager");
   revalidatePath("/finance-executive");
 }

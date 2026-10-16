@@ -11,11 +11,12 @@ import {
   type TxnType,
 } from "@/lib/transactions";
 import type { CategoryMeta, FinanceKpiVariant, FinanceKpiWallet } from "@/lib/finance-kpi";
-import { loadFinancialYears } from "@/lib/financial-year.server";
+import { fetchFinancialYears } from "@/lib/financial-year.server";
 import type { FinancialYear } from "@/lib/financial-year";
 import type { PartyVendorRecord } from "@/lib/finance-party-vendors";
-import { getSessionUser } from "@/lib/session";
+import { getSessionUser, type SessionUser } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
+import { noSkipCache, workspaceCache, type ServerSupabase, type SkipCache } from "@/lib/workspace-cache.server";
 
 /** Manager Finance: all active categories. Executive Finance: Masters role links. */
 export type FinanceCategoryScope = "full" | "role";
@@ -49,6 +50,7 @@ export type TransactionsPageData = {
 export async function loadFinanceCategories(
   supabase: Awaited<ReturnType<typeof createClient>>,
   scope: FinanceCategoryScope = "role",
+  roleName?: string,
 ): Promise<TransactionCategoryRow[]> {
   if (scope === "full") {
     const categoriesResult = await supabase
@@ -108,10 +110,9 @@ export async function loadFinanceCategories(
     roleIdsByCategory.set(link.category_id, list);
   }
 
-  const session = await getSessionUser();
+  const resolvedRoleName = roleName ?? (await getSessionUser())?.role ?? "";
   const roleIdResult = await supabase.rpc("get_my_role_id");
   const roleId = roleIdResult.data ?? null;
-  const roleName = session?.role ?? "";
 
   return (categoriesResult.data ?? [])
     .map((row) => ({
@@ -123,12 +124,25 @@ export async function loadFinanceCategories(
       active: row.active,
       roleIds: roleIdsByCategory.get(row.id) ?? [],
     }))
-    .filter((row) => categoryVisibleToUser(row, roleId, roleName));
+    .filter((row) => categoryVisibleToUser(row, roleId, resolvedRoleName));
 }
 
 export async function loadTransactionsPageData(kpiVariant: FinanceKpiVariant): Promise<TransactionsPageData> {
-  const supabase = await createClient();
   const session = await getSessionUser();
+  if (!session) {
+    return fetchTransactionsPageData(await createClient(), noSkipCache, kpiVariant, null);
+  }
+  return workspaceCache(`finance:${kpiVariant}`, session.id, (supabase, skipCache) =>
+    fetchTransactionsPageData(supabase, skipCache, kpiVariant, session),
+  );
+}
+
+async function fetchTransactionsPageData(
+  supabase: ServerSupabase,
+  skipCache: SkipCache,
+  kpiVariant: FinanceKpiVariant,
+  session: SessionUser | null,
+): Promise<TransactionsPageData> {
   const categoryScope: FinanceCategoryScope = kpiVariant === "executive" ? "role" : "full";
 
   const [
@@ -159,7 +173,7 @@ export async function loadTransactionsPageData(kpiVariant: FinanceKpiVariant): P
       .order("name")
       .order("account_type"),
     supabase.from("payment_modes").select("id, mode").order("mode"),
-    loadFinanceCategories(supabase, categoryScope),
+    loadFinanceCategories(supabase, categoryScope, session?.role ?? ""),
     supabase
       .from("journeys")
       .select(
@@ -175,9 +189,9 @@ export async function loadTransactionsPageData(kpiVariant: FinanceKpiVariant): P
     supabase.from("districts").select("id, name").order("name"),
     supabase.from("societies").select("name").order("name"),
     supabase.from("vendors").select("name, vendor_type, transporter_scope").order("name"),
-    loadAccountLinkUsers(supabase),
+    loadAccountLinkUsers(supabase, session),
     supabase.from("transaction_categories").select("name, cost_nature, default_allocation"),
-    loadFinancialYears(),
+    fetchFinancialYears(supabase, skipCache),
     supabase.from("financial_year_districts").select("financial_year_id, district_id"),
   ]);
 
@@ -202,6 +216,7 @@ export async function loadTransactionsPageData(kpiVariant: FinanceKpiVariant): P
     allCategoriesMetaResult.error?.message ??
     fyDistrictsResult.error?.message ??
     null;
+  if (error) skipCache();
 
   const categoryMetaByName: Record<string, CategoryMeta> = {};
   for (const row of allCategoriesMetaResult.data ?? []) {

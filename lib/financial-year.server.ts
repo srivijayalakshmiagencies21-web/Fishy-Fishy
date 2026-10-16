@@ -10,9 +10,16 @@ import {
 } from "@/lib/financial-year";
 import { createClient } from "@/lib/supabase/server";
 import { todayIsoDate } from "@/lib/transactions";
+import { noSkipCache, type ServerSupabase, type SkipCache } from "@/lib/workspace-cache.server";
 
 export const loadFinancialYears = cache(async (): Promise<FinancialYear[]> => {
-  const supabase = await createClient();
+  return fetchFinancialYears(await createClient());
+});
+
+export async function fetchFinancialYears(
+  supabase: ServerSupabase,
+  skipCache: SkipCache = noSkipCache,
+): Promise<FinancialYear[]> {
   const { data, error } = await supabase
     .from("financial_years")
     .select("id, label, start_date, end_date")
@@ -20,11 +27,12 @@ export const loadFinancialYears = cache(async (): Promise<FinancialYear[]> => {
 
   if (error) {
     console.error("[financial-year] load years failed:", error.message);
+    skipCache();
     return [];
   }
 
   return (data ?? []).map(mapFinancialYearRow);
-});
+}
 
 export async function loadTaggedDistrictIdsForYear(financialYearId: number): Promise<number[]> {
   const supabase = await createClient();

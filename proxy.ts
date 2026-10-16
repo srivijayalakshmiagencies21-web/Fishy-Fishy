@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { landingPath } from "@/lib/access";
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -50,7 +51,9 @@ export async function proxy(request: NextRequest) {
 
   const isLogin = pathname === "/login";
   if (signedIn && (isLogin || pathname === "/")) {
-    return withSession(supabaseResponse, redirectTo(request, "/enter"));
+    const { data: access, error: accessError } = await supabase.rpc("get_my_access");
+    const home = !accessError && access?.[0] ? landingPath(access[0].pages ?? []) : "/enter";
+    return withSession(supabaseResponse, redirectTo(request, home));
   }
 
   return supabaseResponse;
