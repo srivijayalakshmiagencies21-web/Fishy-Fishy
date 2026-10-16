@@ -62,9 +62,15 @@ export const launchSplashCss = `
   z-index: 1000;
   overflow: hidden;
   background: #0f4c81;
+  /* Paints blue past the box too, so no safe-area or overscroll gap shows the page behind. */
+  box-shadow: 0 0 0 100vmax #0f4c81;
   color: #fff;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   animation: launch-splash-out 0.4s ease-in 10s forwards;
+}
+/* Installed iOS app: fixed/inset resolves to the screen minus the status bar; vh is the full screen. */
+@media (display-mode: standalone) {
+  .launch-splash { bottom: auto; height: 100vh; }
 }
 html[data-splash="done"] .launch-splash { animation: launch-splash-done 0.4s ease-in forwards; }
 html[data-splash="off"] .launch-splash { display: none; }
