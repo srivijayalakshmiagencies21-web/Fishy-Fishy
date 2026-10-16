@@ -1236,7 +1236,12 @@ input[type="number"]::-webkit-inner-spin-button {
   gap: 1.5rem;
   background: #0f4c81;
   color: #fff;
-  animation: launch-splash-out 0.4s ease-in 1.4s forwards;
+  /* Failsafe in case the splash script never runs. */
+  animation: launch-splash-out 0.4s ease-in 10s forwards;
+}
+
+html[data-splash="done"] .launch-splash {
+  animation: launch-splash-done 0.4s ease-in forwards;
 }
 
 html[data-splash="off"] .launch-splash {
@@ -1325,6 +1330,13 @@ html[data-splash="off"] .launch-splash {
   }
 }
 
+@keyframes launch-splash-done {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
 @keyframes launch-splash-swim {
   0%,
   100% {
@@ -1392,10 +1404,6 @@ html[data-splash="off"] .launch-splash {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .launch-splash {
-    animation-delay: 0.6s;
-  }
-
   .launch-splash-logo-wrap,
   .launch-splash-bubble {
     animation: none;

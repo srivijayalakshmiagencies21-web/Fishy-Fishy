@@ -2,12 +2,14 @@ import type { CSSProperties } from "react";
 
 const SPLASH_SEEN_KEY = "fishy-fishy:splash";
 
-/** Runs while the HTML is parsed, so a repeat load in the same session never paints the splash. */
-const splashOnceScript = `(function(){try{if(sessionStorage.getItem(${JSON.stringify(
+/**
+ * Runs while the HTML is parsed, so a repeat load in the same session never paints the splash.
+ * Otherwise fades it once it has played a minimum time and the page has streamed in
+ * (`app/loading.tsx` removes its `data-launch-pending` marker).
+ */
+const splashScript = `(function(){var d=document.documentElement,k=${JSON.stringify(
   SPLASH_SEEN_KEY,
-)})){document.documentElement.setAttribute("data-splash","off")}else{sessionStorage.setItem(${JSON.stringify(
-  SPLASH_SEEN_KEY,
-)},"1")}}catch(e){}})();`;
+)};try{if(sessionStorage.getItem(k)){d.setAttribute("data-splash","off");return}sessionStorage.setItem(k,"1")}catch(e){}var min=matchMedia("(prefers-reduced-motion: reduce)").matches?600:1400,t0=Date.now(),timer=setInterval(function(){if(Date.now()-t0<min||document.querySelector("[data-launch-pending]"))return;clearInterval(timer);d.setAttribute("data-splash","done")},50)})();`;
 
 const bubbles = [
   { size: "0.45rem", delay: "0.1s" },
@@ -77,7 +79,7 @@ export function LaunchSplash() {
         </div>
         <p className="launch-splash-name">Fishy-Fishy</p>
       </div>
-      <script dangerouslySetInnerHTML={{ __html: splashOnceScript }} />
+      <script dangerouslySetInnerHTML={{ __html: splashScript }} />
     </>
   );
 }
