@@ -83,7 +83,10 @@ html:not([data-splash]) body > :not(.launch-splash) {
 }
 html[data-splash="done"] .launch-splash { animation: launch-splash-done 0.4s ease-in forwards; }
 html[data-splash="off"] .launch-splash { display: none; }
-/* Starts as plain blue (matching the OS launch screen) and fades the animation in. */
+/*
+ * Starts as plain blue (matching the OS launch screen). The script sets data-in once iOS's
+ * app-open zoom is over and the viewport has settled; the delayed animation is the no-JS fallback.
+ */
 .launch-splash-scene {
   position: absolute;
   inset: 0;
@@ -92,7 +95,12 @@ html[data-splash="off"] .launch-splash { display: none; }
   align-items: center;
   justify-content: center;
   gap: 1.5rem;
-  animation: launch-splash-scene-in 0.45s ease-out 0s both;
+  opacity: 0;
+  transform: scale(0.96);
+  animation: launch-splash-scene-fallback 0.7s ease-out 1.2s forwards;
+}
+.launch-splash[data-in] .launch-splash-scene {
+  animation: launch-splash-scene-in 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 .launch-splash-logo-wrap {
   position: relative;
@@ -150,10 +158,13 @@ html[data-splash="off"] .launch-splash { display: none; }
   font-weight: 600;
   letter-spacing: 0.24em;
   text-transform: uppercase;
-  opacity: 0;
-  animation: launch-splash-name-in 0.6s ease-out 0.25s forwards;
+  opacity: 0.7;
 }
-@keyframes launch-splash-scene-in { from { opacity: 0; } }
+.launch-splash[data-in] .launch-splash-name {
+  animation: launch-splash-name-in 0.6s ease-out 0.3s both;
+}
+@keyframes launch-splash-scene-in { to { opacity: 1; transform: none; } }
+@keyframes launch-splash-scene-fallback { to { opacity: 1; transform: none; } }
 @keyframes launch-splash-out { to { opacity: 0; visibility: hidden; } }
 @keyframes launch-splash-done { to { opacity: 0; visibility: hidden; } }
 @keyframes launch-splash-reveal { to { visibility: visible; } }
@@ -182,19 +193,20 @@ html[data-splash="off"] .launch-splash { display: none; }
   from { transform: rotate(-10deg); }
   to { transform: rotate(10deg); }
 }
-@keyframes launch-splash-name-in { to { opacity: 0.7; } }
+@keyframes launch-splash-name-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .launch-splash-logo-wrap, .launch-splash-bubble, .launch-splash-name { animation: none; }
-  .launch-splash-name { opacity: 0.7; }
+  .launch-splash-logo-wrap, .launch-splash-bubble { animation: none; }
+  .launch-splash-scene { transform: none; }
   .launch-splash-bubble, .launch-splash-rising-bubble, .launch-splash-swimmer { display: none; }
 }
 `;
 
 /**
- * Runs while the HTML is parsed: skips the splash on later loads in the session, otherwise fades it
- * once it has played a minimum time and the page has streamed in (`app/loading.tsx` removes its
- * `data-launch-pending` marker).
+ * Runs while the HTML is parsed: skips the splash on later loads in the session. Otherwise fades the
+ * scene in once the viewport has held still for a few frames (iOS is still zooming the app open and
+ * resizing it when the first frames paint), then fades the splash out once it has played a minimum
+ * time and the page has streamed in (`app/loading.tsx` removes its `data-launch-pending` marker).
  */
 export const launchSplashScript = `(function(){var d=document.documentElement,k=${JSON.stringify(
   SPLASH_SEEN_KEY,
-)};try{if(sessionStorage.getItem(k)){d.setAttribute("data-splash","off");return}sessionStorage.setItem(k,"1")}catch(e){}var min=matchMedia("(prefers-reduced-motion: reduce)").matches?600:1400,t0=Date.now(),timer=setInterval(function(){if(Date.now()-t0<min||document.querySelector("[data-launch-pending]"))return;clearInterval(timer);d.setAttribute("data-splash","done")},50)})();`;
+)};try{if(sessionStorage.getItem(k)){d.setAttribute("data-splash","off");return}sessionStorage.setItem(k,"1")}catch(e){}var s=document.querySelector(".launch-splash"),w=innerWidth,h=innerHeight,still=0,t0=Date.now();function settle(){if(innerWidth!==w||innerHeight!==h){w=innerWidth;h=innerHeight;still=0}else still++;var t=Date.now()-t0;if(t>=250&&still>=6||t>=900){s&&s.setAttribute("data-in","")}else requestAnimationFrame(settle)}requestAnimationFrame(settle);var min=matchMedia("(prefers-reduced-motion: reduce)").matches?1200:1700,timer=setInterval(function(){if(Date.now()-t0<min||document.querySelector("[data-launch-pending]"))return;clearInterval(timer);d.setAttribute("data-splash","done")},50)})();`;

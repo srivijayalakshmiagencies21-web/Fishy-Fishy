@@ -4,7 +4,12 @@ export function LaunchSplash() {
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: launchSplashCss }} />
-      <div className="launch-splash" aria-hidden="true" dangerouslySetInnerHTML={{ __html: launchSplashInnerHtml }} />
+      <div
+        className="launch-splash"
+        aria-hidden="true"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{ __html: launchSplashInnerHtml }}
+      />
       <script dangerouslySetInnerHTML={{ __html: launchSplashScript }} />
     </>
   );
