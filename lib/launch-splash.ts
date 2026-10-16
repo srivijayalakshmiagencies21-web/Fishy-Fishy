@@ -72,6 +72,15 @@ export const launchSplashCss = `
 @media (display-mode: standalone) {
   .launch-splash { bottom: auto; height: 100vh; }
 }
+/*
+ * While the splash is up, keep the page hidden and the canvas blue: on iOS launch the viewport
+ * settles a few frames late, and anything the splash doesn't cover yet must still read as blue.
+ */
+html:not([data-splash]) { background: #0f4c81; }
+html:not([data-splash]) body > :not(.launch-splash) {
+  visibility: hidden;
+  animation: launch-splash-reveal 0s linear 10s forwards;
+}
 html[data-splash="done"] .launch-splash { animation: launch-splash-done 0.4s ease-in forwards; }
 html[data-splash="off"] .launch-splash { display: none; }
 /* Starts as plain blue (matching the OS launch screen) and fades the animation in. */
@@ -147,6 +156,7 @@ html[data-splash="off"] .launch-splash { display: none; }
 @keyframes launch-splash-scene-in { from { opacity: 0; } }
 @keyframes launch-splash-out { to { opacity: 0; visibility: hidden; } }
 @keyframes launch-splash-done { to { opacity: 0; visibility: hidden; } }
+@keyframes launch-splash-reveal { to { visibility: visible; } }
 @keyframes launch-splash-swim {
   0%, 100% { transform: translateY(0) rotate(0deg); }
   50% { transform: translateY(-0.3rem) rotate(-1.5deg); }
