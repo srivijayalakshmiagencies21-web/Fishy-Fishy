@@ -573,7 +573,7 @@ export function StartPointForm({
 
   if (viewState === 'list') {
     return (
-      <div className="mx-auto max-w-4xl space-y-6 pb-12">
+      <div className={`space-y-6 pb-12 ${activeJourneys.length === 0 ? '' : 'mx-auto max-w-4xl'}`}>
         {activeJourneys.length === 0 ? (
           <section className="surface data-card">
             <p className="px-4 py-8 text-sm text-[var(--text-secondary)]">No journeys on start point yet.</p>
