@@ -6,6 +6,7 @@ import { BodyPortal, ModalOverlay } from "@/components/fixed-overlay";
 import { DateField } from "@/components/date-field";
 import { FinanceKpiCards } from "@/components/finance-kpi-cards";
 import { PartyField } from "@/components/party-field";
+import { RowActionsMenu } from "@/components/row-actions-menu";
 import { SelectField } from "@/components/select-field";
 import { masterPartyNameSet, rememberCustomParty, rememberPcCustomParty } from "@/lib/finance-party-memory";
 import {
@@ -1608,12 +1609,16 @@ function ledgerCategory(row: TransactionRow) {
 }
 
 function DeleteTxn({ id }: { id: number }) {
+  const formRef = useRef<HTMLFormElement>(null);
   return (
-    <form action={deleteTransaction}>
-      <input type="hidden" name="id" value={id} />
-      <button type="submit" className="shrink-0 py-1 text-sm font-semibold text-blue hover:underline">
-        Remove
-      </button>
-    </form>
+    <>
+      <form ref={formRef} action={deleteTransaction} hidden>
+        <input type="hidden" name="id" value={id} />
+      </form>
+      <RowActionsMenu
+        label="Transaction options"
+        actions={[{ label: "Remove", tone: "danger", onSelect: () => formRef.current?.requestSubmit() }]}
+      />
+    </>
   );
 }

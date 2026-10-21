@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useActionState, useCallback, useEffect, useRef, useState } from "react";
 import { ModalOverlay } from "@/components/fixed-overlay";
 import { refreshMaster } from "@/components/master-cache";
+import { RowActionsMenu } from "@/components/row-actions-menu";
 import type { FormState } from "@/app/(workspace)/masters/actions";
 import {
   addSociety,
@@ -269,12 +270,12 @@ function AccountMaster({ rows, users }: { rows: AccountRow[]; users: LinkUserOpt
                 <p className="text-sm text-muted">{row.linkedUsername ?? "Not linked"}</p>
                 <p className="text-sm tabular-nums text-muted">Opening: {openingBalanceSummary(row)}</p>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <button type="button" className="pill pill-blue" onClick={() => setEditRow(row)}>
-                  Edit
-                </button>
-                <DeleteButton action={deleteAccount} id={row.id} label={accountLedgerLabel(row)} />
-              </div>
+              <DeleteButton
+                action={deleteAccount}
+                id={row.id}
+                label={accountLedgerLabel(row)}
+                onEdit={() => setEditRow(row)}
+              />
             </li>
           ))}
         </ul>
@@ -297,12 +298,12 @@ function AccountMaster({ rows, users }: { rows: AccountRow[]; users: LinkUserOpt
                   <td className="px-4 py-3 tabular-nums">{formatAmount(row.openingBalance)}</td>
                   <td className="px-4 py-3 text-[var(--text-secondary)]">{openingBalanceAsOf(row)}</td>
                   <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button type="button" className="pill pill-blue" onClick={() => setEditRow(row)}>
-                        Edit
-                      </button>
-                      <DeleteButton action={deleteAccount} id={row.id} label={accountLedgerLabel(row)} />
-                    </div>
+                    <DeleteButton
+                      action={deleteAccount}
+                      id={row.id}
+                      label={accountLedgerLabel(row)}
+                      onEdit={() => setEditRow(row)}
+                    />
                   </td>
                 </tr>
               ))}
@@ -461,12 +462,12 @@ function TransactionCategoriesMaster({ rows, roles }: { rows: TransactionCategor
                 <p className="text-sm text-muted">{categoryMeta(row)}</p>
                 <p className="text-sm text-muted">Roles: {categoryRolesLabel(row, roles)}</p>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <button type="button" className="pill pill-blue" onClick={() => setEditRow(row)}>
-                  Edit
-                </button>
-                <DeleteButton action={deleteTransactionCategory} id={row.id} label={row.name} />
-              </div>
+              <DeleteButton
+                action={deleteTransactionCategory}
+                id={row.id}
+                label={row.name}
+                onEdit={() => setEditRow(row)}
+              />
             </li>
           ))}
         </ul>
@@ -487,12 +488,12 @@ function TransactionCategoriesMaster({ rows, roles }: { rows: TransactionCategor
                   <td className="px-4 py-3 text-[var(--text-secondary)]">{categoryMeta(row)}</td>
                   <td className="px-4 py-3 text-[var(--text-secondary)]">{categoryRolesLabel(row, roles)}</td>
                   <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button type="button" className="pill pill-blue" onClick={() => setEditRow(row)}>
-                        Edit
-                      </button>
-                      <DeleteButton action={deleteTransactionCategory} id={row.id} label={row.name} />
-                    </div>
+                    <DeleteButton
+                      action={deleteTransactionCategory}
+                      id={row.id}
+                      label={row.name}
+                      onEdit={() => setEditRow(row)}
+                    />
                   </td>
                 </tr>
               ))}
@@ -829,9 +830,10 @@ function DistrictCard({ district }: { district: DistrictRow }) {
       <section className="surface flex flex-col justify-between p-4">
         <div className="mb-4 flex items-start justify-between gap-3">
           <h2 className="min-w-0 text-lg font-bold break-words text-blue-dark">{district.name}</h2>
-          <button type="button" className="pill pill-blue shrink-0" onClick={() => setIsModalOpen(true)}>
-            Edit
-          </button>
+          <RowActionsMenu
+            label={`Options for ${district.name}`}
+            actions={[{ label: "Edit", onSelect: () => setIsModalOpen(true) }]}
+          />
         </div>
         <div className="grid grid-cols-2 gap-4 border-t border-line/60 pt-4">
           <div>
@@ -1098,18 +1100,21 @@ function DeleteButton({
   action,
   id,
   label,
+  onEdit,
   onSuccess,
   onError,
 }: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
   id: number;
   label: string;
+  onEdit?: () => void;
   onSuccess?: () => void;
   onError?: (message: string | null) => void;
 }) {
   const [state, formAction, pending] = useActionState(action, null);
   const refreshAfterMutation = useMasterRefreshAfterMutation();
   const wasPendingRef = useRef(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     if (wasPendingRef.current && !pending) {
@@ -1125,17 +1130,21 @@ function DeleteButton({
 
   return (
     <div className="flex flex-col items-end gap-0.5">
-      <form action={formAction}>
+      <form ref={formRef} action={formAction} hidden>
         <input type="hidden" name="id" value={id} />
-        <button
-          type="submit"
-          disabled={pending}
-          className="shrink-0 py-1 text-sm font-semibold text-blue hover:underline disabled:opacity-50"
-          aria-label={`Remove ${label}`}
-        >
-          {pending ? "…" : "Remove"}
-        </button>
       </form>
+      <RowActionsMenu
+        label={`Options for ${label}`}
+        actions={[
+          ...(onEdit ? [{ label: "Edit", onSelect: onEdit }] : []),
+          {
+            label: pending ? "Removing…" : "Remove",
+            tone: "danger" as const,
+            disabled: pending,
+            onSelect: () => formRef.current?.requestSubmit(),
+          },
+        ]}
+      />
       {state?.error && !onError ? (
         <p className="max-w-[12rem] text-right text-xs font-medium text-red-600">{state.error}</p>
       ) : null}
@@ -1155,6 +1164,7 @@ function UnlinkCompanyButton({
   const [state, formAction, pending] = useActionState(unlinkCompany, null);
   const refreshAfterMutation = useMasterRefreshAfterMutation();
   const wasPendingRef = useRef(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     if (wasPendingRef.current && !pending && state === null) {
@@ -1165,18 +1175,21 @@ function UnlinkCompanyButton({
 
   return (
     <div className="flex flex-col items-end gap-0.5">
-      <form action={formAction}>
+      <form ref={formRef} action={formAction} hidden>
         <input type="hidden" name="district_id" value={districtId} />
         <input type="hidden" name="company_id" value={companyId} />
-        <button
-          type="submit"
-          disabled={pending}
-          className="shrink-0 py-1 text-sm font-semibold text-blue hover:underline disabled:opacity-50"
-          aria-label={`Remove ${companyLabel}`}
-        >
-          {pending ? "…" : "Remove"}
-        </button>
       </form>
+      <RowActionsMenu
+        label={`Options for ${companyLabel}`}
+        actions={[
+          {
+            label: pending ? "Removing…" : "Remove",
+            tone: "danger",
+            disabled: pending,
+            onSelect: () => formRef.current?.requestSubmit(),
+          },
+        ]}
+      />
       {state?.error ? <p className="max-w-[12rem] text-right text-xs font-medium text-red-600">{state.error}</p> : null}
     </div>
   );

@@ -18,7 +18,7 @@ export function FinancialYearPicker({
   const [optimisticYearId, setOptimisticYearId] = useOptimistic(selectedYearId);
 
   const options = useMemo(
-    () => years.map((year) => ({ value: String(year.id), label: year.label })),
+    () => years.map((year) => ({ value: String(year.id), label: `FY ${year.label}` })),
     [years],
   );
 
@@ -36,21 +36,16 @@ export function FinancialYearPicker({
   const value = optimisticYearId != null ? String(optimisticYearId) : "";
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-0.5 sm:gap-1">
-      <span className="text-[0.58rem] font-bold uppercase leading-none tracking-wide text-muted sm:text-[0.65rem] sm:tracking-widest">
-        Financial year
-      </span>
-      <div className="min-w-0">
-        <SelectField
-          compact
-          placeholder={years.length === 0 ? "Configure FY in Govt rates" : "Select FY"}
-          options={options}
-          value={value}
-          disabled={disabled}
-          autoSelectWhenSingle={autoSelectWhenSingle}
-          onChange={onPick}
-        />
-      </div>
+    <div className="w-full min-w-0" title="Financial year">
+      <SelectField
+        compact
+        placeholder={years.length === 0 ? "Configure FY in Govt rates" : "Select FY"}
+        options={options}
+        value={value}
+        disabled={disabled}
+        autoSelectWhenSingle={autoSelectWhenSingle}
+        onChange={onPick}
+      />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { appPages, normalizeUserPages, pageLabel } from "@/lib/access";
 import type { DirectoryRole, DirectoryUser } from "@/lib/directory";
 import { createClient } from "@/lib/supabase/client";
 import { useNavIntent } from "@/components/nav-intent";
+import { RowActionsMenu, type RowAction } from "@/components/row-actions-menu";
 import { SelectField } from "@/components/select-field";
 
 type RoleRow = {
@@ -208,6 +209,42 @@ export function UserManagement({
     await load();
   }
 
+  function userActions(
+    user: UserRow,
+    { canReset, canDeactivate, canRemove }: { canReset: boolean; canDeactivate: boolean; canRemove: boolean },
+  ): RowAction[] {
+    const actions: RowAction[] = [];
+    if (canReset) {
+      actions.push({
+        label: "Reset password",
+        onSelect: () => {
+          setResetUserId(user.user_id);
+          setConfirmUserId(null);
+          setNextPassword("");
+        },
+      });
+    }
+    if (canDeactivate) {
+      actions.push({
+        label: user.active ? "Deactivate" : "Activate",
+        tone: user.active ? "danger" : undefined,
+        onSelect: () => void setActive(user.user_id, user.active),
+      });
+    }
+    if (canRemove) {
+      actions.push({
+        label: "Remove",
+        tone: "danger",
+        onSelect: () => {
+          setResetUserId(null);
+          setNextPassword("");
+          setConfirmUserId(user.user_id);
+        },
+      });
+    }
+    return actions;
+  }
+
   const visibleUsers = actorRole === "Admin"
     ? users
     : users.filter((user) => user.role_name === "Manager" || user.role_name === "Employee");
@@ -355,7 +392,6 @@ export function UserManagement({
                   const canReset = canResetPassword(actorRole, user.role_name, canManageRoles);
                   const canDeactivate = canDeactivateUser(actorRole, user.role_name, user.user_id === currentUserId, canManageRoles);
                   const canRemove = canManageRoles && user.user_id !== currentUserId && (actorRole === "Admin" || user.role_name !== "Admin");
-                  const hasActions = canReset || canDeactivate || canRemove;
 
                   return (
                     <article key={user.user_id} className="surface flex flex-col gap-3.5 p-4 transition-shadow hover:shadow-sm">
@@ -377,11 +413,17 @@ export function UserManagement({
                             </div>
                           </div>
                         </div>
-                        {!user.active ? (
-                          <span className="shrink-0 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[0.65rem] font-semibold tracking-wider text-red-600 uppercase">
-                            Inactive
-                          </span>
-                        ) : null}
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          {!user.active ? (
+                            <span className="shrink-0 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[0.65rem] font-semibold tracking-wider text-red-600 uppercase">
+                              Inactive
+                            </span>
+                          ) : null}
+                          <RowActionsMenu
+                            label={`Options for ${displayName(user.email)}`}
+                            actions={userActions(user, { canReset, canDeactivate, canRemove })}
+                          />
+                        </div>
                       </div>
 
                       <div className="flex items-center justify-between gap-3 pt-0.5">
@@ -477,44 +519,6 @@ export function UserManagement({
                             </button>
                           </div>
                         </div>
-                      ) : hasActions ? (
-                        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--border)] pt-3">
-                          {canReset ? (
-                            <button
-                              type="button"
-                              className="pill pill-blue"
-                              onClick={() => {
-                                setResetUserId(user.user_id);
-                                setConfirmUserId(null);
-                                setNextPassword("");
-                              }}
-                            >
-                              Reset password
-                            </button>
-                          ) : null}
-                          {canDeactivate ? (
-                            <button
-                              type="button"
-                              className={user.active ? "pill pill-red" : "pill pill-green"}
-                              onClick={() => setActive(user.user_id, user.active)}
-                            >
-                              {user.active ? "Deactivate" : "Activate"}
-                            </button>
-                          ) : null}
-                          {canRemove ? (
-                            <button
-                              type="button"
-                              className="pill pill-blue"
-                              onClick={() => {
-                                setResetUserId(null);
-                                setNextPassword("");
-                                setConfirmUserId(user.user_id);
-                              }}
-                            >
-                              Remove
-                            </button>
-                          ) : null}
-                        </div>
                       ) : null}
                     </article>
                   );
@@ -601,37 +605,10 @@ export function UserManagement({
                               ) : (
                                 <div className="flex items-center justify-end gap-2">
                                   {user.active ? null : <span className="text-xs font-semibold tracking-wide text-[var(--text-muted)] uppercase">Inactive</span>}
-                                  {canReset ? (
-                                    <button
-                                      type="button"
-                                      className="pill pill-blue"
-                                      onClick={() => {
-                                        setResetUserId(user.user_id);
-                                        setConfirmUserId(null);
-                                        setNextPassword("");
-                                      }}
-                                    >
-                                      Reset password
-                                    </button>
-                                  ) : null}
-                                  {canDeactivate ? (
-                                    <button
-                                      type="button"
-                                      className={user.active ? "pill pill-red" : "pill pill-green"}
-                                      onClick={() => setActive(user.user_id, user.active)}
-                                    >
-                                      {user.active ? "Deactivate" : "Activate"}
-                                    </button>
-                                  ) : null}
-                                  {canRemove ? (
-                                    <button type="button" className="pill pill-blue" onClick={() => {
-                                      setResetUserId(null);
-                                      setNextPassword("");
-                                      setConfirmUserId(user.user_id);
-                                    }}>
-                                      Remove
-                                    </button>
-                                  ) : null}
+                                  <RowActionsMenu
+                                    label={`Options for ${displayName(user.email)}`}
+                                    actions={userActions(user, { canReset, canDeactivate, canRemove })}
+                                  />
                                 </div>
                               )}
                             </td>
@@ -748,10 +725,13 @@ export function UserManagement({
                     ) : null}
                   </div>
                   {role.is_system ? null : (
-                    <div className="flex gap-3 text-sm font-semibold text-[var(--brand)]">
-                      <button type="button" onClick={() => openRoleForm(role)}>Edit</button>
-                      <button type="button" onClick={() => removeRole(role.id)}>Remove</button>
-                    </div>
+                    <RowActionsMenu
+                      label={`Options for ${role.name}`}
+                      actions={[
+                        { label: "Edit", onSelect: () => openRoleForm(role) },
+                        { label: "Remove", tone: "danger", onSelect: () => void removeRole(role.id) },
+                      ]}
+                    />
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">

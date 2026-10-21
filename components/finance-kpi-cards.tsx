@@ -72,7 +72,7 @@ export function FinanceKpiCards({
               type="button"
               onClick={() => toggleKpi(def.key)}
               className={[
-                "flex min-h-[5.5rem] flex-col items-start justify-center gap-0.5 rounded-xl border border-blue/25 bg-blue-soft px-4 py-3 text-left transition-colors hover:border-blue/40",
+                "flex min-h-[5.5rem] flex-col items-start justify-between gap-1 rounded-xl border border-blue/25 bg-blue-soft px-4 py-3 text-left transition-colors hover:border-blue/40",
                 isFullMobile ? "col-span-2 md:col-span-1" : "col-span-1",
                 selected ? "ring-2 ring-blue ring-offset-2 ring-offset-[var(--page)]" : "",
               ].join(" ")}

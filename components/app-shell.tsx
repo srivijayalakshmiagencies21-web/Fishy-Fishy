@@ -7,7 +7,7 @@ import { flushSync } from "react-dom";
 import { prefetchMasters } from "@/components/master-cache";
 import { useNavIntent } from "@/components/nav-intent";
 import { PageHeaderFinancialYear } from "@/components/page-header-financial-year";
-import { PageHeaderAsideProvider, PageHeaderAsideSlot } from "@/components/page-header-aside";
+import { PageHeaderAsideProvider, PageHeaderAsideSlot, PageHeaderTabsSlot } from "@/components/page-header-aside";
 import { appPages, landingPath } from "@/lib/access";
 import { forgetLaunchHome, rememberLaunchHome } from "@/lib/launch-home";
 import type { FinancialYear } from "@/lib/financial-year";
@@ -193,7 +193,7 @@ export function AppShell({
           <div className="header-mobile-brand flex flex-col items-center justify-center md:hidden">
             <div className="flex items-center gap-2">
               <span className="brand-mark h-5 text-blue-dark" role="img" aria-hidden="true" />
-              <p className="header-brand">Fishy-Fishy</p>
+              <p className="header-brand">Fishy Fishy</p>
             </div>
             <p className="header-tagline">Seed logistics</p>
           </div>
@@ -229,9 +229,9 @@ export function AppShell({
 
       <aside className={`app-sidebar ${collapsed ? "is-collapsed" : ""}`}>
         <div className="sidebar-brand">
-          <span className="brand-mark sidebar-logo" role="img" aria-label={collapsed ? "Fishy-Fishy" : undefined} />
+          <span className="brand-mark sidebar-logo" role="img" aria-label={collapsed ? "Fishy Fishy" : undefined} />
           <div className="sidebar-label flex flex-col justify-center">
-            <p className="sidebar-brand-name leading-none">Fishy-Fishy</p>
+            <p className="sidebar-brand-name leading-none">Fishy Fishy</p>
             <p className="mt-1 text-[0.65rem] font-bold tracking-widest text-white/70 uppercase">Seed Logistics</p>
           </div>
         </div>
@@ -295,7 +295,7 @@ export function AppShell({
                       ? "Account"
                       : onMasters
                         ? (shownMaster?.label ?? "Masters")
-                        : (currentPage?.label ?? "Fishy-Fishy")}
+                        : (currentPage?.label ?? "Fishy Fishy")}
                 </h1>
                 {showFinancialYearHeader ? (
                   <PageHeaderFinancialYear
@@ -307,7 +307,7 @@ export function AppShell({
                 )}
               </div>
               {onMasters ? (
-                <div className="segmented-control mt-4" role="tablist" aria-label="Masters">
+                <div className="segmented-control mt-3" role="tablist" aria-label="Masters">
                   {masterLinks.map((link) => {
                     const href = `/masters/${link.slug}`;
                     const selected = (previewMaster ? `/masters/${previewMaster}` : pathname) === href;
@@ -329,7 +329,7 @@ export function AppShell({
                 </div>
               ) : null}
               {onUsers && pages.includes("users") ? (
-                <div className="segmented-control mt-4" role="tablist" aria-label="Users & Roles">
+                <div className="segmented-control mt-3" role="tablist" aria-label="Users & Roles">
                   <Link
                     href="/admin/users"
                     prefetch
@@ -354,6 +354,7 @@ export function AppShell({
                   </Link>
                 </div>
               ) : null}
+              <PageHeaderTabsSlot />
             </div>
             </div>
             </PageHeaderAsideProvider>

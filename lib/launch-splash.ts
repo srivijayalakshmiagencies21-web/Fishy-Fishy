@@ -51,7 +51,7 @@ export const launchSplashInnerHtml = [
     (b) => `<span class="launch-splash-bubble" style="--size:${b.size};--delay:${b.delay}"></span>`,
   ),
   "</div>",
-  '<p class="launch-splash-name">Fishy-Fishy</p>',
+  '<p class="launch-splash-name">Fishy Fishy</p>',
   "</div>",
 ].join("");
 

@@ -80,7 +80,7 @@ export function OverviewLedgerFormulaHeaderTrigger({ label }: { label: string })
 
   return (
     <th className="px-3 py-3 sm:px-4">
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex items-center justify-between gap-2">
         <span>{label}</span>
         <button
           type="button"

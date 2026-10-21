@@ -757,7 +757,7 @@ export function GovtRatesLedger({
   return (
     <div className="space-y-4">
       {canEdit ? (
-        <div className="flex justify-end px-1">
+        <div className="flex justify-start px-1">
           <button type="button" onClick={() => setModalOpen(true)} className="btn-primary w-full sm:w-auto">
             Configure FY
           </button>

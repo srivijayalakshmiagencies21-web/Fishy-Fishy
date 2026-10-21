@@ -84,11 +84,11 @@ export function PwaInstallPrompt() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/icon-192.png"
-              alt="Fishy-Fishy"
+              alt="Fishy Fishy"
               className="h-10 w-10 shrink-0 rounded-xl border border-blue-100 object-cover shadow-sm"
             />
             <div className="min-w-0">
-              <p className="text-sm font-bold text-gray-900 truncate">Install Fishy-Fishy</p>
+              <p className="text-sm font-bold text-gray-900 truncate">Install Fishy Fishy</p>
               <p className="text-xs text-gray-500 truncate">Add to home screen for mobile access</p>
             </div>
           </div>

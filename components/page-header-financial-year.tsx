@@ -11,7 +11,7 @@ export function PageHeaderFinancialYear({
   selectedYearId: number | null;
 }) {
   return (
-    <div className="page-header-aside page-header-aside--active">
+    <div className="page-header-aside page-header-aside--active page-header-fy">
       <FinancialYearPicker years={years} selectedYearId={selectedYearId} autoSelectWhenSingle />
     </div>
   );

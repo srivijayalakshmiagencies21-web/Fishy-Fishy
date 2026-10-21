@@ -923,16 +923,23 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .canvas-page-header {
-  padding: 1.25rem 1.25rem 1rem;
+  padding: 0.75rem 1.25rem;
   border-bottom: 1px solid var(--border);
+  background: linear-gradient(135deg, var(--brand-soft) 0%, #f7f8fa 55%);
+}
+
+/* Default tab track colour is the same as the gradient's start, so lift it off the header. */
+.canvas-page-header .segmented-control {
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 
 .page-header-row {
   --page-header-aside-width: 12.5rem;
-  --page-header-row-min-height: 3.5rem;
+  --page-header-row-min-height: 2.25rem;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  align-items: end;
+  align-items: center;
   gap: 0.5rem 0.75rem;
   min-height: var(--page-header-row-min-height);
 }
@@ -954,17 +961,29 @@ input[type="number"]::-webkit-inner-spin-button {
   width: 100%;
   min-width: 0;
   justify-self: end;
-  align-self: end;
   touch-action: manipulation;
+}
+
+/* FY picker only shows a short label like "FY 2026-27", so it gets a smaller slot and trigger. */
+.page-header-row:has(.page-header-fy) {
+  --page-header-aside-width: 8.75rem;
+}
+
+.page-header-fy .select-field-trigger {
+  min-height: 32px;
+  padding: 0 0.625rem;
+  font-size: 0.875rem;
+  border-radius: 8px;
 }
 
 .page-title {
   min-width: 0;
   margin: 0;
   font-size: 1.25rem;
-  font-weight: 650;
+  font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.25;
+  color: var(--brand-dark);
 }
 
 @media (max-width: 479px) {

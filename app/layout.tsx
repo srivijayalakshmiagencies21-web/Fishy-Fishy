@@ -14,15 +14,15 @@ const sourceSans = Source_Sans_3({
 
 export const metadata: Metadata = {
   title: {
-    default: "Fishy-Fishy",
-    template: "%s | Fishy-Fishy",
+    default: "Fishy Fishy",
+    template: "%s | Fishy Fishy",
   },
   description: "Fish seed loading and logistics management app",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Fishy-Fishy",
+    title: "Fishy Fishy",
     startupImage: iosSplashScreens.map(({ width, height, ratio }) => ({
       url: `/splash/ios-${width}x${height}@${ratio}x.png`,
       media: `(device-width: ${width}px) and (device-height: ${height}px) and (-webkit-device-pixel-ratio: ${ratio}) and (orientation: portrait)`,
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     "mobile-web-app-capable": "yes",
     "apple-mobile-web-app-capable": "yes",
     "apple-mobile-web-app-status-bar-style": "black-translucent",
-    "apple-mobile-web-app-title": "Fishy-Fishy",
+    "apple-mobile-web-app-title": "Fishy Fishy",
   },
 };
 

@@ -1713,7 +1713,7 @@ export function FinalPointForm({
 
   if (journeys.length === 0) {
     return (
-      <section className="surface data-card">
+      <section className="surface data-card mx-auto max-w-4xl">
         <p className="px-4 py-8 text-sm text-[var(--text-secondary)]">No final points yet.</p>
       </section>
     );

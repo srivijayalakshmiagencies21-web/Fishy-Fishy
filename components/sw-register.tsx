@@ -12,10 +12,10 @@ export function ServiceWorkerRegister() {
       navigator.serviceWorker
         .register("/sw.js")
         .then((reg) => {
-          console.log("Fishy-Fishy PWA ServiceWorker registered with scope:", reg.scope);
+          console.log("Fishy Fishy PWA ServiceWorker registered with scope:", reg.scope);
         })
         .catch((err) => {
-          console.warn("Fishy-Fishy PWA ServiceWorker registration failed:", err);
+          console.warn("Fishy Fishy PWA ServiceWorker registration failed:", err);
         });
     }
   }, []);

@@ -35,6 +35,7 @@ import { JourneySummaryCard } from "@/components/journey-summary-card";
 import { isValidMobile, mobileDigits, MOBILE_DIGITS } from "@/lib/phone";
 import { scrollCanvasToTop } from "@/lib/scroll-canvas";
 import { FixedOverlay, ModalOverlay } from "@/components/fixed-overlay";
+import { RowActionsMenu } from "@/components/row-actions-menu";
 import { FloatingAddButton } from "@/components/floating-add-button";
 
 
@@ -573,7 +574,7 @@ export function StartPointForm({
 
   if (viewState === 'list') {
     return (
-      <div className={`space-y-6 pb-12 ${activeJourneys.length === 0 ? '' : 'mx-auto max-w-4xl'}`}>
+      <div className="mx-auto max-w-4xl space-y-6 pb-12">
         {activeJourneys.length === 0 ? (
           <section className="surface data-card">
             <p className="px-4 py-8 text-sm text-[var(--text-secondary)]">No journeys on start point yet.</p>
@@ -829,12 +830,10 @@ export function StartPointForm({
               </div>
               
               {tIndex > 0 && (
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => removeTruck(truck.id)} className="flex items-center gap-1 text-red-500 hover:text-red-700 text-xs sm:text-sm font-semibold transition-colors bg-red-50 px-2 sm:px-3 py-1.5 rounded-full hover:bg-red-100">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                    <span className="hidden sm:inline">Remove</span>
-                  </button>
-                </div>
+                <RowActionsMenu
+                  label={`Options for primary truck ${tIndex + 1}`}
+                  actions={[{ label: "Remove truck", tone: "danger", onSelect: () => removeTruck(truck.id) }]}
+                />
               )}
             </div>
             
@@ -1023,14 +1022,13 @@ export function StartPointForm({
                      <div key={item.id} className="relative group space-y-4 bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm transition-all duration-300 hover:shadow-md">
                         {iIndex > 0 && (
                           <div className="flex justify-end sm:absolute sm:-top-3 sm:-right-3 z-10 -mt-2 -mr-1 sm:mt-0 sm:mr-0">
-                            <button 
-                              type="button" 
-                              onClick={() => removeVendor(truck.id, item.id)}
-                              className="h-7 w-7 sm:h-8 sm:w-8 bg-white border border-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:border-red-100 hover:bg-red-50 transition-all shadow-sm"
-                              aria-label="Remove supplier block"
-                            >
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5 sm:h-4 sm:w-4"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                            </button>
+                            <RowActionsMenu
+                              label="Supplier block options"
+                              className="border border-gray-100 bg-white shadow-sm"
+                              actions={[
+                                { label: "Remove supplier", tone: "danger", onSelect: () => removeVendor(truck.id, item.id) },
+                              ]}
+                            />
                           </div>
                         )}
                         <div className="grid gap-4 sm:gap-6 sm:grid-cols-2">

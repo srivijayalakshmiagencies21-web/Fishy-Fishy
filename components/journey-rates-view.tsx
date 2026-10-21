@@ -15,6 +15,7 @@ import {
   type VendorGovtRatesView,
 } from "@/lib/journey-rates";
 import { GovtRatesLedger } from "@/components/govt-rates-ledger";
+import { PageHeaderTabs } from "@/components/page-header-aside";
 import type { FinancialYear } from "@/lib/financial-year";
 import type { GovtRateLedgerRow } from "@/lib/govt-rates.server";
 import type { DistrictRow } from "@/lib/masters";
@@ -185,7 +186,7 @@ function VendorGovtRatesToggle({
   onChange: (value: VendorGovtRatesView) => void;
 }) {
   return (
-    <div className="segmented-control w-full sm:w-auto" role="tablist" aria-label="Vendor and government rates">
+    <div className="segmented-control" role="tablist" aria-label="Vendor and government rates">
       {(
         [
           { id: "vendors" as const, label: "Vendors" },
@@ -200,7 +201,7 @@ function VendorGovtRatesToggle({
             role="tab"
             aria-selected={selected}
             onClick={() => onChange(mode.id)}
-            className={`segmented-btn flex-1 sm:flex-none ${selected ? "active" : ""}`}
+            className={`segmented-btn ${selected ? "active" : ""}`}
           >
             {mode.label}
           </button>
@@ -1023,23 +1024,21 @@ export function JourneyRatesView({
 
   return (
     <div className="space-y-6 pb-6">
-      <div className="flex flex-col gap-3 px-1 sm:flex-row sm:items-center sm:justify-between">
+      <PageHeaderTabs>
         <VendorGovtRatesToggle value={ratesView} onChange={setRatesView} />
-        {showVendorJourneys && rows.length > 1 ? (
-          <div className="flex items-center justify-between gap-3 sm:justify-end">
-            <p className="text-xs font-semibold text-muted sm:order-first">
-              {rows.length} completed journeys
-            </p>
-            <button
-              type="button"
-              onClick={toggleAll}
-              className="text-xs font-bold text-blue hover:text-blue-dark transition-colors cursor-pointer"
-            >
-              {allExpanded ? "Collapse all" : "Expand all"}
-            </button>
-          </div>
-        ) : null}
-      </div>
+      </PageHeaderTabs>
+      {showVendorJourneys && rows.length > 1 ? (
+        <div className="flex items-center justify-between gap-3 px-1">
+          <p className="text-xs font-semibold text-muted">{rows.length} completed journeys</p>
+          <button
+            type="button"
+            onClick={toggleAll}
+            className="text-xs font-bold text-blue hover:text-blue-dark transition-colors cursor-pointer"
+          >
+            {allExpanded ? "Collapse all" : "Expand all"}
+          </button>
+        </div>
+      ) : null}
 
       {ratesView === "govt" ? (
         <GovtRatesLedger
